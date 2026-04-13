@@ -6,9 +6,10 @@ apple-notes-ts — TypeScript package for reading and searching Apple Notes on m
 
 ## Commands
 
-- `bun test` — Run all tests (74 tests against fixture DB, no Full Disk Access needed)
+- `bun test` — Run all tests (against fixture DB, no Full Disk Access needed)
 - `bun run lint` — TypeScript type checking + Biome linting/format checking
 - `bun run format` — Auto-fix lint issues and reformat with Biome
+- `bun run mcp` — Start the stdio MCP server (requires Full Disk Access)
 - `bun example` — List notes on this machine and display one at random (requires Full Disk Access)
 - `bun run create-fixture` — Regenerate the test fixture database
 
@@ -30,6 +31,7 @@ apple-notes-ts — TypeScript package for reading and searching Apple Notes on m
 - `src/conversion/proto-to-markdown.ts` — AttributeRun[] → markdown
 - `src/database/queries.ts` — SQL queries and Mac time conversion
 - `src/database/reader.ts` — SQLite query execution and row mapping
+- `src/mcp-server.ts` — Stdio MCP server wrapping AppleNotes API as 7 tools
 - `tests/fixtures/create-test-db.ts` — Generates the test NoteStore.sqlite
 
 ## Style Type Values (ParagraphStyle.style_type)

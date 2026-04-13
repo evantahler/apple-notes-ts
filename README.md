@@ -51,6 +51,35 @@ const url = db.getAttachmentUrl("attachment-uuid"); // file:// URL or null
 db.close();
 ```
 
+## MCP Server
+
+apple-notes-ts includes a stdio MCP server so AI agents can interact with your notes.
+
+### Configure
+
+Add to your MCP client config (e.g., Claude Desktop, Claude Code):
+
+```json
+{
+  "mcpServers": {
+    "apple-notes": {
+      "command": "bunx",
+      "args": ["apple-notes-ts"]
+    }
+  }
+}
+```
+
+### Available Tools
+
+- **list_accounts** — List all Apple Notes accounts on this Mac
+- **list_folders** — List folders, optionally filtered by account
+- **list_notes** — List notes, optionally filtered by folder/account
+- **search_notes** — Search notes by title and content
+- **read_note** — Read a note as markdown (supports pagination)
+- **get_attachments** — List attachments for a note
+- **get_attachment_url** — Get the file URL for an attachment
+
 ## API
 
 Pass `dbPath` or `containerPath` to `new AppleNotes()` to override auto-detection. Note content is returned as markdown — see [docs/markdown-conversion.md](docs/markdown-conversion.md) for the full formatting map.
@@ -60,8 +89,9 @@ Errors: `DatabaseNotFoundError` (missing DB or no Full Disk Access), `NoteNotFou
 ## Development
 
 ```bash
-bun test              # Run test suite (74 tests)
+bun test              # Run test suite
 bun run lint          # TypeScript type checking + Biome lint
+bun run mcp           # Start the MCP stdio server
 bun example           # List notes on this machine, display one at random
 bun run create-fixture # Regenerate the test fixture database
 ```
