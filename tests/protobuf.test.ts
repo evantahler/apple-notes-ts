@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import protobuf from "protobufjs";
-import { decodeNoteData } from "../src/protobuf/decode.ts";
+import {
+  decodeMergeableTable,
+  decodeNoteData,
+} from "../src/protobuf/decode.ts";
 
 const PROTO_PATH = resolve(import.meta.dir, "../src/protobuf/notestore.proto");
 const root = protobuf.loadSync(PROTO_PATH);
@@ -190,5 +193,170 @@ describe("decodeNoteData", () => {
 
     expect(result.text).toBe("");
     expect(result.attributeRuns).toHaveLength(0);
+  });
+});
+
+describe("decodeMergeableTable", () => {
+  const MergableDataProto = root.lookupType("MergableDataProto");
+
+  function makeTableBlob(cells: string[][]): Buffer {
+    const numCols = cells[0]?.length ?? 0;
+    const numRows = cells.length;
+
+    // Create UUIDs for columns and rows
+    const uuidItems: Uint8Array[] = [];
+    for (let i = 0; i < numCols + numRows; i++) {
+      const uuid = new Uint8Array(16);
+      uuid[0] = i + 1;
+      uuidItems.push(uuid);
+    }
+
+    // Cell note entries
+    const cellNoteEntries = cells.flat().map((text) => ({
+      note: {
+        noteText: `${text}\n`,
+        attributeRun: [{ length: text.length + 1 }],
+      },
+    }));
+
+    // First 6 entries are structural, then cell notes follow
+    const BASE_ENTRY_COUNT = 3 + 1 + numCols; // root + colSet + rowSet + cellCols + per-col dicts
+
+    // Build per-column row dictionaries
+    const colDictEntries = [];
+    for (let c = 0; c < numCols; c++) {
+      const elements = [];
+      for (let r = 0; r < numRows; r++) {
+        elements.push({
+          key: { unsignedIntegerValue: numCols + r }, // row uuid index
+          value: { objectIndex: BASE_ENTRY_COUNT + r * numCols + c },
+        });
+      }
+      colDictEntries.push({ dictionary: { element: elements } });
+    }
+
+    // cellColumns dictionary
+    const cellColElements = [];
+    for (let c = 0; c < numCols; c++) {
+      cellColElements.push({
+        key: { unsignedIntegerValue: c }, // col uuid index
+        value: { objectIndex: 3 + 1 + c }, // per-col dict entry index
+      });
+    }
+
+    const entries = [
+      // Entry 0: table root
+      {
+        customMap: {
+          type: 0,
+          mapEntry: [
+            { key: 0, value: { objectIndex: 1 } },
+            { key: 1, value: { objectIndex: 2 } },
+            { key: 2, value: { objectIndex: 3 } },
+          ],
+        },
+      },
+      // Entry 1: crColumns
+      {
+        orderedSet: {
+          ordering: {
+            array: {
+              contents: {
+                noteText: "\u{FFFC}".repeat(numCols),
+                attributeRun: [{ length: numCols }],
+              },
+              attachment: Array.from({ length: numCols }, (_, i) => ({
+                index: i,
+                uuid: uuidItems[i],
+              })),
+            },
+          },
+        },
+      },
+      // Entry 2: crRows
+      {
+        orderedSet: {
+          ordering: {
+            array: {
+              contents: {
+                noteText: "\u{FFFC}".repeat(numRows),
+                attributeRun: [{ length: numRows }],
+              },
+              attachment: Array.from({ length: numRows }, (_, i) => ({
+                index: numCols + i,
+                uuid: uuidItems[numCols + i],
+              })),
+            },
+          },
+        },
+      },
+      // Entry 3: cellColumns dictionary
+      { dictionary: { element: cellColElements } },
+      // Entries 4+: per-column row dictionaries
+      ...colDictEntries,
+      // Cell note entries
+      ...cellNoteEntries,
+    ];
+
+    const proto = MergableDataProto.create({
+      mergableDataObject: {
+        version: 1,
+        mergeableDataObjectData: {
+          mergeableDataObjectEntry: entries,
+          mergeableDataObjectKeyItem: ["crColumns", "crRows", "cellColumns"],
+          mergeableDataObjectTypeItem: ["com.apple.notes.ICTable"],
+          mergeableDataObjectUuidItem: uuidItems,
+        },
+      },
+    });
+
+    return Buffer.from(gzipSync(MergableDataProto.encode(proto).finish()));
+  }
+
+  test("decodes a 2x3 table", () => {
+    const blob = makeTableBlob([
+      ["Name", "Value"],
+      ["Alpha", "100"],
+      ["Beta", "200"],
+    ]);
+
+    const table = decodeMergeableTable(blob);
+    expect(table).not.toBeNull();
+    expect(table?.rows).toEqual([
+      ["Name", "Value"],
+      ["Alpha", "100"],
+      ["Beta", "200"],
+    ]);
+  });
+
+  test("decodes a single-cell table", () => {
+    const blob = makeTableBlob([["Hello"]]);
+    const table = decodeMergeableTable(blob);
+    expect(table).not.toBeNull();
+    expect(table?.rows).toEqual([["Hello"]]);
+  });
+
+  test("returns null for invalid data", () => {
+    const blob = Buffer.from(gzipSync(Buffer.from("not a protobuf")));
+    const table = decodeMergeableTable(blob);
+    expect(table).toBeNull();
+  });
+
+  test("returns null for non-table mergeable data", () => {
+    const proto = MergableDataProto.create({
+      mergableDataObject: {
+        version: 1,
+        mergeableDataObjectData: {
+          mergeableDataObjectEntry: [{ registerLatest: { contents: {} } }],
+          mergeableDataObjectKeyItem: [],
+          mergeableDataObjectTypeItem: [],
+        },
+      },
+    });
+    const blob = Buffer.from(
+      gzipSync(MergableDataProto.encode(proto).finish()),
+    );
+    const table = decodeMergeableTable(blob);
+    expect(table).toBeNull();
   });
 });

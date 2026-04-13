@@ -48,6 +48,10 @@ export interface DecodedAttachmentInfo {
   typeUti?: string;
 }
 
+export interface DecodedTable {
+  rows: string[][];
+}
+
 let cachedRoot: protobuf.Root | null = null;
 
 function getProtoRoot(): protobuf.Root {
@@ -118,6 +122,167 @@ function toDecodedRun(raw: Record<string, unknown>): DecodedAttributeRun {
   }
 
   return run;
+}
+
+// Decode a ZMERGEABLEDATA1 blob into a simple table structure.
+// The blob is a gzipped MergableDataProto with CRDT entries for rows, columns, and cells.
+//
+// Table CRDT layout:
+//   Entry with custom_map type "com.apple.notes.ICTable" has map entries:
+//     crColumns → OrderedSet (column UUID indices in order)
+//     crRows    → OrderedSet (row UUID indices in order)
+//     cellColumns → Dictionary { colUuidIdx → Dictionary { rowUuidIdx → Note } }
+//
+// Both OrderedSet attachment.index and Dictionary key.unsigned_integer_value
+// are indices into the mergeable_data_object_uuid_item array.
+export function decodeMergeableTable(
+  blob: Buffer | Uint8Array,
+): DecodedTable | null {
+  try {
+    const decompressed = gunzipSync(blob);
+    const root = getProtoRoot();
+    const MergableDataProto = root.lookupType("MergableDataProto");
+    const message = MergableDataProto.decode(decompressed);
+    const obj = MergableDataProto.toObject(message, {
+      longs: Number,
+      bytes: Uint8Array,
+      defaults: false,
+    }) as Record<string, unknown>;
+
+    const mdo = obj.mergableDataObject as Record<string, unknown> | undefined;
+    const data = mdo?.mergeableDataObjectData as
+      | Record<string, unknown>
+      | undefined;
+    if (!data) return null;
+
+    const entries =
+      (data.mergeableDataObjectEntry as Record<string, unknown>[]) || [];
+    const keys = (data.mergeableDataObjectKeyItem as string[]) || [];
+    const types = (data.mergeableDataObjectTypeItem as string[]) || [];
+
+    // Find the table root entry (custom_map with type "com.apple.notes.ICTable")
+    const tableEntry = entries.find((e) => {
+      const cm = e.customMap as Record<string, unknown> | undefined;
+      if (!cm) return false;
+      const typeIdx = cm.type as number | undefined;
+      return typeIdx != null && types[typeIdx] === "com.apple.notes.ICTable";
+    });
+    if (!tableEntry) return null;
+
+    const customMap = tableEntry.customMap as Record<string, unknown>;
+    const mapEntries = (customMap.mapEntry as Record<string, unknown>[]) || [];
+
+    // Build lookup: key name → object_index into entries array
+    const keyToObjectIndex = new Map<string, number>();
+    for (const me of mapEntries) {
+      const keyIdx = me.key as number | undefined;
+      const value = me.value as Record<string, unknown> | undefined;
+      if (keyIdx == null || !value) continue;
+      const keyName = keys[keyIdx];
+      const objIdx = value.objectIndex as number | undefined;
+      if (keyName && objIdx != null) {
+        keyToObjectIndex.set(keyName, objIdx);
+      }
+    }
+
+    const colIdx = keyToObjectIndex.get("crColumns");
+    const rowIdx = keyToObjectIndex.get("crRows");
+    const cellColIdx = keyToObjectIndex.get("cellColumns");
+    if (colIdx == null || rowIdx == null) return null;
+
+    // Get ordered UUID indices for columns and rows
+    const colUuidIndices = extractOrderedSetIndices(entries[colIdx]);
+    const rowUuidIndices = extractOrderedSetIndices(entries[rowIdx]);
+    if (colUuidIndices.length === 0 || rowUuidIndices.length === 0) return null;
+
+    // Build cell map: "colUuidIdx:rowUuidIdx" → cell text
+    const cellMap = new Map<string, string>();
+    if (cellColIdx != null) {
+      buildCellMap(entries, cellColIdx, cellMap);
+    }
+
+    // Assemble rows
+    const rows: string[][] = [];
+    for (const rowUuidIdx of rowUuidIndices) {
+      const row: string[] = [];
+      for (const colUuidIdx of colUuidIndices) {
+        row.push(cellMap.get(`${colUuidIdx}:${rowUuidIdx}`) ?? "");
+      }
+      rows.push(row);
+    }
+
+    return { rows };
+  } catch {
+    return null;
+  }
+}
+
+// Extract ordered UUID indices from an OrderedSet entry.
+// Each attachment's `index` field is an index into uuid_item.
+function extractOrderedSetIndices(
+  entry: Record<string, unknown> | undefined,
+): number[] {
+  if (!entry) return [];
+  const orderedSet = entry.orderedSet as Record<string, unknown> | undefined;
+  if (!orderedSet) return [];
+  const ordering = orderedSet.ordering as Record<string, unknown> | undefined;
+  if (!ordering) return [];
+  const array = ordering.array as Record<string, unknown> | undefined;
+  if (!array) return [];
+  const attachments = (array.attachment as Record<string, unknown>[]) || [];
+  return attachments.map((a) => (a.index as number) ?? 0);
+}
+
+// Navigate cellColumns: Dictionary { colUuidIdx → Dict { rowUuidIdx → Note } }
+function buildCellMap(
+  entries: Record<string, unknown>[],
+  cellColIdx: number,
+  cellMap: Map<string, string>,
+): void {
+  const cellColEntry = entries[cellColIdx];
+  if (!cellColEntry) return;
+
+  const dict = cellColEntry.dictionary as Record<string, unknown> | undefined;
+  if (!dict) return;
+  const elements = (dict.element as Record<string, unknown>[]) || [];
+
+  for (const elem of elements) {
+    const colKey = elem.key as Record<string, unknown> | undefined;
+    const colValue = elem.value as Record<string, unknown> | undefined;
+    if (!colKey || !colValue) continue;
+
+    const colUuidIdx = colKey.unsignedIntegerValue as number | undefined;
+    const colObjIdx = colValue.objectIndex as number | undefined;
+    if (colUuidIdx == null || colObjIdx == null) continue;
+
+    const rowDictEntry = entries[colObjIdx];
+    if (!rowDictEntry) continue;
+
+    const rowDict = rowDictEntry.dictionary as
+      | Record<string, unknown>
+      | undefined;
+    if (!rowDict) continue;
+
+    for (const rowElem of (rowDict.element as Record<string, unknown>[]) ||
+      []) {
+      const rowKey = rowElem.key as Record<string, unknown> | undefined;
+      const rowValue = rowElem.value as Record<string, unknown> | undefined;
+      if (!rowKey || !rowValue) continue;
+
+      const rowUuidIdx = rowKey.unsignedIntegerValue as number | undefined;
+      const cellObjIdx = rowValue.objectIndex as number | undefined;
+      if (rowUuidIdx == null || cellObjIdx == null) continue;
+
+      const cellEntry = entries[cellObjIdx];
+      if (!cellEntry) continue;
+
+      const cellNote = cellEntry.note as Record<string, unknown> | undefined;
+      if (!cellNote) continue;
+
+      const noteText = (cellNote.noteText as string) || "";
+      cellMap.set(`${colUuidIdx}:${rowUuidIdx}`, noteText.replace(/\n$/, ""));
+    }
+  }
 }
 
 export function decodeNoteData(zdata: Buffer | Uint8Array): DecodedNote {

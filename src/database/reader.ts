@@ -254,6 +254,20 @@ export class NoteReader {
     }
   }
 
+  getTableData(attachmentIdentifier: string): Buffer | null {
+    try {
+      const row = this.db
+        .query(Q.GET_TABLE_MERGEABLE_DATA)
+        .get(attachmentIdentifier) as {
+        mergeableData: Buffer | null;
+      } | null;
+      return row?.mergeableData ?? null;
+    } catch {
+      // ZMERGEABLEDATA1 column may not exist in older databases
+      return null;
+    }
+  }
+
   listAttachments(noteId: number): AttachmentRef[] {
     const rows = this.db
       .query(Q.GET_ATTACHMENTS)

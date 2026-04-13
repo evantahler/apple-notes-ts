@@ -1,6 +1,6 @@
 {
   "name": "apple-notes-ts",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "TypeScript package for reading and searching Apple Notes on macOS via direct SQLite access. Includes markdown conversion and attachment support!",
   "module": "src/index.ts",
   "bin": {

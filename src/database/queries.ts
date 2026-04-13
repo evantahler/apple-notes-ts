@@ -141,6 +141,13 @@ export const RESOLVE_MEDIA_IDENTIFIER = `
   WHERE att.ZIDENTIFIER = ?
 `;
 
+// Fetch the ZMERGEABLEDATA1 blob for a table attachment (com.apple.notes.table)
+export const GET_TABLE_MERGEABLE_DATA = `
+  SELECT ZMERGEABLEDATA1 as mergeableData
+  FROM ZICCLOUDSYNCINGOBJECT
+  WHERE ZIDENTIFIER = ?
+`;
+
 // Discover entity types from Z_PRIMARYKEY table
 export const GET_ENTITY_TYPES = `
   SELECT Z_ENT, Z_NAME FROM Z_PRIMARYKEY

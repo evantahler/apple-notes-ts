@@ -246,7 +246,8 @@ db.exec(`
     ZFILENAME VARCHAR,
     ZTYPEUTI VARCHAR,
     ZNOTE1 INTEGER,
-    ZMEDIA INTEGER
+    ZMEDIA INTEGER,
+    ZMERGEABLEDATA1 BLOB
   );
 
   -- Note data table (contains the protobuf ZDATA blobs)
@@ -621,6 +622,189 @@ db.query(
    VALUES (302, ${ENT_ATTACHMENT}, 1, ?, NULL, 'com.apple.paper.doc.pdf', ?)`,
 ).run(pdfAttachmentId, pdfNotePk);
 
+// Note 14: Note with embedded table
+const MergableDataProto = root.lookupType("MergableDataProto");
+
+// Build a 2-column, 3-row table: header (Name, Value), rows (Alpha/100, Beta/200)
+function encodeTableBlob(): Buffer {
+  // UUID items (raw 16-byte UUIDs) for columns and rows
+  // Index 0: col0 UUID, Index 1: col1 UUID
+  // Index 2: row0 UUID, Index 3: row1 UUID, Index 4: row2 UUID
+  const uuid0 = new Uint8Array([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const uuid1 = new Uint8Array([2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const uuid2 = new Uint8Array([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const uuid3 = new Uint8Array([4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const uuid4 = new Uint8Array([5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+  // Keys: crColumns, crRows, cellColumns
+  // Types: com.apple.notes.ICTable
+  const keyItems = ["crColumns", "crRows", "cellColumns"];
+  const typeItems = ["com.apple.notes.ICTable"];
+  const uuidItems = [uuid0, uuid1, uuid2, uuid3, uuid4];
+
+  // Cell notes for each cell (6 cells: 3 rows x 2 cols)
+  const cellTexts = ["Name", "Value", "Alpha", "100", "Beta", "200"];
+  const cellNoteEntries = cellTexts.map((text) => ({
+    note: {
+      noteText: `${text}\n`,
+      attributeRun: [{ length: text.length + 1 }],
+    },
+  }));
+
+  // Entry indices layout:
+  //  0: table root (custom_map)
+  //  1: crColumns ordered set
+  //  2: crRows ordered set
+  //  3: cellColumns dictionary (col → row dict)
+  //  4: col0 row dictionary
+  //  5: col1 row dictionary
+  //  6-11: cell notes (Name, Value, Alpha, 100, Beta, 200)
+
+  const entries = [
+    // Entry 0: table root
+    {
+      customMap: {
+        type: 0, // index into typeItems → "com.apple.notes.ICTable"
+        mapEntry: [
+          { key: 0, value: { objectIndex: 1 } }, // crColumns → entry 1
+          { key: 1, value: { objectIndex: 2 } }, // crRows → entry 2
+          { key: 2, value: { objectIndex: 3 } }, // cellColumns → entry 3
+        ],
+      },
+    },
+    // Entry 1: crColumns ordered set (2 columns: uuid indices 0, 1)
+    {
+      orderedSet: {
+        ordering: {
+          array: {
+            contents: {
+              noteText: "\u{FFFC}\u{FFFC}",
+              attributeRun: [{ length: 2 }],
+            },
+            attachment: [
+              { index: 0, uuid: uuid0 },
+              { index: 1, uuid: uuid1 },
+            ],
+          },
+        },
+      },
+    },
+    // Entry 2: crRows ordered set (3 rows: uuid indices 2, 3, 4)
+    {
+      orderedSet: {
+        ordering: {
+          array: {
+            contents: {
+              noteText: "\u{FFFC}\u{FFFC}\u{FFFC}",
+              attributeRun: [{ length: 3 }],
+            },
+            attachment: [
+              { index: 2, uuid: uuid2 },
+              { index: 3, uuid: uuid3 },
+              { index: 4, uuid: uuid4 },
+            ],
+          },
+        },
+      },
+    },
+    // Entry 3: cellColumns dictionary
+    // Maps col uuid index → entry with row dictionary
+    {
+      dictionary: {
+        element: [
+          {
+            key: { unsignedIntegerValue: 0 }, // col0 (uuid index 0)
+            value: { objectIndex: 4 },         // → entry 4
+          },
+          {
+            key: { unsignedIntegerValue: 1 }, // col1 (uuid index 1)
+            value: { objectIndex: 5 },         // → entry 5
+          },
+        ],
+      },
+    },
+    // Entry 4: col0 row dictionary (Name, Alpha, Beta)
+    {
+      dictionary: {
+        element: [
+          {
+            key: { unsignedIntegerValue: 2 }, // row0 (uuid index 2)
+            value: { objectIndex: 6 },         // → "Name"
+          },
+          {
+            key: { unsignedIntegerValue: 3 }, // row1 (uuid index 3)
+            value: { objectIndex: 8 },         // → "Alpha"
+          },
+          {
+            key: { unsignedIntegerValue: 4 }, // row2 (uuid index 4)
+            value: { objectIndex: 10 },        // → "Beta"
+          },
+        ],
+      },
+    },
+    // Entry 5: col1 row dictionary (Value, 100, 200)
+    {
+      dictionary: {
+        element: [
+          {
+            key: { unsignedIntegerValue: 2 }, // row0 (uuid index 2)
+            value: { objectIndex: 7 },         // → "Value"
+          },
+          {
+            key: { unsignedIntegerValue: 3 }, // row1 (uuid index 3)
+            value: { objectIndex: 9 },         // → "100"
+          },
+          {
+            key: { unsignedIntegerValue: 4 }, // row2 (uuid index 4)
+            value: { objectIndex: 11 },        // → "200"
+          },
+        ],
+      },
+    },
+    // Entries 6-11: cell notes
+    ...cellNoteEntries,
+  ];
+
+  const proto = MergableDataProto.create({
+    mergableDataObject: {
+      version: 1,
+      mergeableDataObjectData: {
+        mergeableDataObjectEntry: entries,
+        mergeableDataObjectKeyItem: keyItems,
+        mergeableDataObjectTypeItem: typeItems,
+        mergeableDataObjectUuidItem: uuidItems,
+      },
+    },
+  });
+
+  const buffer = MergableDataProto.encode(proto).finish();
+  return Buffer.from(gzipSync(buffer));
+}
+
+const tableAttachmentId = "TABLE-ATTACH-UUID-001";
+const tableNotePk = insertNote({
+  title: "Note With Table",
+  snippet: "Has an embedded table",
+  folderId: 11,
+  createdAt: yesterday,
+  modifiedAt: now,
+  noteText: "Note With Table\nHere is a table:\n\uFFFC\n",
+  attributeRuns: [
+    titleRun(16), // "Note With Table\n"
+    bodyRun(17),  // "Here is a table:\n"
+    attachmentRun(tableAttachmentId, "com.apple.notes.table"),
+    bodyRun(1),   // "\n"
+  ],
+});
+
+// Insert the table attachment with ZMERGEABLEDATA1
+const tableBlob = encodeTableBlob();
+db.query(
+  `INSERT INTO ZICCLOUDSYNCINGOBJECT
+   (Z_PK, Z_ENT, Z_OPT, ZIDENTIFIER, ZTYPEUTI, ZNOTE1, ZMERGEABLEDATA1)
+   VALUES (303, ${ENT_ATTACHMENT}, 1, ?, 'com.apple.notes.table', ?, ?)`,
+).run(tableAttachmentId, tableNotePk, tableBlob);
+
 // ============================================================================
 // Create fake attachment files
 // ============================================================================
@@ -641,6 +825,6 @@ writeFileSync(resolve(pdfDir, "FallbackPDF.pdf"), "fake-pdf-data-for-testing");
 
 db.close();
 console.log(`Created test database at ${DB_PATH}`);
-console.log("Notes created: 13");
+console.log("Notes created: 14");
 console.log("Accounts: iCloud, On My Mac");
 console.log("Folders: Notes, Work, Personal");
