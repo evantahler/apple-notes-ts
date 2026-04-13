@@ -71,7 +71,7 @@ describe("folders", () => {
 describe("notes", () => {
   test("returns all notes", () => {
     const notes = db.notes();
-    expect(notes).toHaveLength(13);
+    expect(notes).toHaveLength(14);
   });
 
   test("filters by folder name", () => {
@@ -352,6 +352,26 @@ describe("read with pagination", () => {
     const page = db.read(100, { offset: 0, limit: 100 });
     expect(page.hasMore).toBe(false);
     expect(page.totalLines).toBeLessThan(100);
+  });
+});
+
+// ============================================================================
+// read() with embedded table
+// ============================================================================
+
+describe("read with embedded table", () => {
+  test("renders table as markdown instead of attachment placeholder", () => {
+    const content = db.read(113);
+    expect(content.meta.title).toBe("Note With Table");
+    expect(content.markdown).toContain("# Note With Table");
+    expect(content.markdown).toContain("Here is a table:");
+    // Should NOT contain the attachment placeholder
+    expect(content.markdown).not.toContain("com.apple.notes.table");
+    // Should contain markdown table
+    expect(content.markdown).toContain("| Name | Value |");
+    expect(content.markdown).toContain("| --- | --- |");
+    expect(content.markdown).toContain("| Alpha | 100 |");
+    expect(content.markdown).toContain("| Beta | 200 |");
   });
 });
 

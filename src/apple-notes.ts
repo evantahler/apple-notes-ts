@@ -4,7 +4,11 @@ import { noteToMarkdown } from "./conversion/proto-to-markdown.ts";
 import { openDatabase } from "./database/connection.ts";
 import { NoteReader } from "./database/reader.ts";
 import { NoteNotFoundError, PasswordProtectedError } from "./errors.ts";
-import { decodeNoteData } from "./protobuf/decode.ts";
+import {
+  type DecodedTable,
+  decodeMergeableTable,
+  decodeNoteData,
+} from "./protobuf/decode.ts";
 import type {
   Account,
   AttachmentRef,
@@ -55,7 +59,8 @@ export class AppleNotes {
     let markdown = "";
     if (zdata) {
       const decoded = decodeNoteData(zdata);
-      markdown = noteToMarkdown(decoded);
+      const tables = this.resolveTableAttachments(decoded);
+      markdown = noteToMarkdown(decoded, tables);
     }
 
     if (pagination) {
@@ -108,6 +113,28 @@ export class AppleNotes {
 
     // Fall back to resolving directly by the attachment identifier
     return this.attachmentResolver.resolve(attachmentId);
+  }
+
+  private resolveTableAttachments(
+    decoded: import("./protobuf/decode.ts").DecodedNote,
+  ): Map<string, DecodedTable> | undefined {
+    const tableRuns = decoded.attributeRuns.filter(
+      (r) =>
+        r.attachmentInfo?.typeUti === "com.apple.notes.table" &&
+        r.attachmentInfo.attachmentIdentifier,
+    );
+    if (tableRuns.length === 0) return undefined;
+
+    const tables = new Map<string, DecodedTable>();
+    for (const run of tableRuns) {
+      const id = run.attachmentInfo?.attachmentIdentifier;
+      if (!id) continue;
+      const blob = this.reader.getTableData(id);
+      if (!blob) continue;
+      const table = decodeMergeableTable(blob);
+      if (table) tables.set(id, table);
+    }
+    return tables.size > 0 ? tables : undefined;
   }
 
   close(): void {

@@ -1,4 +1,8 @@
-import type { DecodedAttributeRun, DecodedNote } from "../protobuf/decode.ts";
+import type {
+  DecodedAttributeRun,
+  DecodedNote,
+  DecodedTable,
+} from "../protobuf/decode.ts";
 
 // ParagraphStyle.style_type values (from notestore.proto)
 const STYLE_TITLE = 0;
@@ -15,7 +19,10 @@ const FONT_WEIGHT_BOLD = 1;
 const FONT_WEIGHT_ITALIC = 2;
 const FONT_WEIGHT_BOLD_ITALIC = 3;
 
-export function noteToMarkdown(note: DecodedNote): string {
+export function noteToMarkdown(
+  note: DecodedNote,
+  tables?: Map<string, DecodedTable>,
+): string {
   if (!note.text) return "";
 
   const { text, attributeRuns } = note;
@@ -37,7 +44,13 @@ export function noteToMarkdown(note: DecodedNote): string {
     if (isCode) {
       mdLines.push(line.text);
     } else {
-      mdLines.push(renderLine(line));
+      // Check if this line is a table attachment
+      const tableMarkdown = tryRenderTableLine(line, tables);
+      if (tableMarkdown != null) {
+        mdLines.push(tableMarkdown);
+      } else {
+        mdLines.push(renderLine(line));
+      }
     }
   }
 
@@ -232,4 +245,53 @@ function renderInlineFormatting(
   }
 
   return result;
+}
+
+function tryRenderTableLine(
+  line: LineParts,
+  tables?: Map<string, DecodedTable>,
+): string | null {
+  if (!tables) return null;
+  // A table line is a single U+FFFC run with type com.apple.notes.table
+  for (const run of line.runs) {
+    if (
+      run.attachmentInfo?.typeUti === "com.apple.notes.table" &&
+      run.attachmentInfo.attachmentIdentifier
+    ) {
+      const table = tables.get(run.attachmentInfo.attachmentIdentifier);
+      if (table) return renderTable(table);
+    }
+  }
+  return null;
+}
+
+function renderTable(table: DecodedTable): string {
+  if (table.rows.length === 0) return "";
+
+  const numCols = Math.max(...table.rows.map((r) => r.length));
+  if (numCols === 0) return "";
+
+  // Escape pipe characters in cell content
+  const escapePipe = (s: string) => s.replace(/\|/g, "\\|");
+
+  const lines: string[] = [];
+
+  // First row as header
+  const header = table.rows[0] ?? [];
+  lines.push(
+    `| ${Array.from({ length: numCols }, (_, i) => escapePipe(header[i] ?? "")).join(" | ")} |`,
+  );
+
+  // Separator
+  lines.push(`| ${Array.from({ length: numCols }, () => "---").join(" | ")} |`);
+
+  // Remaining rows
+  for (let i = 1; i < table.rows.length; i++) {
+    const row = table.rows[i] ?? [];
+    lines.push(
+      `| ${Array.from({ length: numCols }, (_, j) => escapePipe(row[j] ?? "")).join(" | ")} |`,
+    );
+  }
+
+  return lines.join("\n");
 }

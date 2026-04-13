@@ -3,6 +3,7 @@ import { noteToMarkdown } from "../src/conversion/proto-to-markdown.ts";
 import type {
   DecodedAttributeRun,
   DecodedNote,
+  DecodedTable,
 } from "../src/protobuf/decode.ts";
 
 function note(text: string, runs: DecodedAttributeRun[]): DecodedNote {
@@ -259,5 +260,81 @@ describe("noteToMarkdown", () => {
       note("Hello\n\n\n", [{ length: 6 }, { length: 1 }, { length: 1 }]),
     );
     expect(md).toBe("Hello");
+  });
+
+  test("renders table attachment as markdown table", () => {
+    const tables = new Map<string, DecodedTable>();
+    tables.set("TABLE-1", {
+      rows: [
+        ["Name", "Value"],
+        ["Alpha", "100"],
+        ["Beta", "200"],
+      ],
+    });
+
+    const md = noteToMarkdown(
+      note("Title\n\uFFFC\n", [
+        { length: 6, paragraphStyle: { styleType: 0 } },
+        {
+          length: 1,
+          attachmentInfo: {
+            attachmentIdentifier: "TABLE-1",
+            typeUti: "com.apple.notes.table",
+          },
+        },
+        { length: 1 },
+      ]),
+      tables,
+    );
+
+    expect(md).toContain("| Name | Value |");
+    expect(md).toContain("| --- | --- |");
+    expect(md).toContain("| Alpha | 100 |");
+    expect(md).toContain("| Beta | 200 |");
+    expect(md).not.toContain("com.apple.notes.table");
+  });
+
+  test("falls back to placeholder when table data is not provided", () => {
+    const md = noteToMarkdown(
+      note("Title\n\uFFFC\n", [
+        { length: 6, paragraphStyle: { styleType: 0 } },
+        {
+          length: 1,
+          attachmentInfo: {
+            attachmentIdentifier: "TABLE-1",
+            typeUti: "com.apple.notes.table",
+          },
+        },
+        { length: 1 },
+      ]),
+    );
+
+    expect(md).toContain("com.apple.notes.table");
+  });
+
+  test("renders table with pipe characters escaped", () => {
+    const tables = new Map<string, DecodedTable>();
+    tables.set("TABLE-2", {
+      rows: [
+        ["A", "B"],
+        ["x|y", "z"],
+      ],
+    });
+
+    const md = noteToMarkdown(
+      note("\uFFFC\n", [
+        {
+          length: 1,
+          attachmentInfo: {
+            attachmentIdentifier: "TABLE-2",
+            typeUti: "com.apple.notes.table",
+          },
+        },
+        { length: 1 },
+      ]),
+      tables,
+    );
+
+    expect(md).toContain("x\\|y");
   });
 });
