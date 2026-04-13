@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "module": "src/index.ts",
   "type": "module",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "test": "bun test",
