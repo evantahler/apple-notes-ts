@@ -71,7 +71,7 @@ export function createServer(options?: AppleNotesOptions) {
     "list_notes",
     {
       description:
-        "List notes ordered by most recently modified. Returns metadata only (title, snippet, dates) — use read_note to get the full content. Optionally filter by folder and/or account.",
+        "List notes with optional filtering, sorting, and limiting. Returns metadata only (title, snippet, dates) — use read_note to get full content.",
       inputSchema: {
         folder: z
           .string()
@@ -85,11 +85,36 @@ export function createServer(options?: AppleNotesOptions) {
           .describe(
             "Account name (e.g. 'iCloud') or numeric account ID to filter by.",
           ),
+        search: z
+          .string()
+          .optional()
+          .describe(
+            "Text to filter notes by, matched case-insensitively against title and snippet.",
+          ),
+        sortBy: z
+          .enum(["title", "createdAt", "modifiedAt"])
+          .optional()
+          .describe("Field to sort results by. Defaults to 'modifiedAt'."),
+        order: z
+          .enum(["asc", "desc"])
+          .optional()
+          .describe(
+            "Sort direction. Defaults to 'desc' (newest first for date sorts, Z-A for title).",
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .optional()
+          .describe("Maximum number of notes to return."),
       },
     },
-    async ({ folder, account }) => {
+    async ({ folder, account, search, sortBy, order, limit }) => {
       try {
-        return toolResult(appleNotes.notes({ folder, account }));
+        return toolResult(
+          appleNotes.notes({ folder, account, search, sortBy, order, limit }),
+        );
       } catch (e) {
         if (e instanceof AppleNotesError) return toolError(e.message);
         throw e;

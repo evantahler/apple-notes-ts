@@ -200,6 +200,38 @@ export class NoteReader {
       );
     }
 
+    if (options?.search) {
+      const q = options.search.toLowerCase();
+      results = results.filter(
+        (r) =>
+          r.meta.title.toLowerCase().includes(q) ||
+          r.meta.snippet.toLowerCase().includes(q),
+      );
+    }
+
+    const sortBy = options?.sortBy ?? "modifiedAt";
+    const order = options?.order ?? "desc";
+    const mul = order === "asc" ? 1 : -1;
+
+    results.sort((a, b) => {
+      switch (sortBy) {
+        case "title":
+          return mul * a.meta.title.localeCompare(b.meta.title);
+        case "createdAt":
+          return (
+            mul * (a.meta.createdAt.getTime() - b.meta.createdAt.getTime())
+          );
+        default:
+          return (
+            mul * (a.meta.modifiedAt.getTime() - b.meta.modifiedAt.getTime())
+          );
+      }
+    });
+
+    if (options?.limit != null && options.limit > 0) {
+      results = results.slice(0, options.limit);
+    }
+
     return results;
   }
 

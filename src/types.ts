@@ -51,6 +51,9 @@ export interface AttachmentRef {
   url: string | null;
 }
 
+export type NoteSortField = "title" | "createdAt" | "modifiedAt";
+export type SortOrder = "asc" | "desc";
+
 export interface SearchOptions {
   folder?: string;
   limit?: number;
@@ -59,6 +62,10 @@ export interface SearchOptions {
 export interface ListNotesOptions {
   folder?: string;
   account?: string;
+  search?: string;
+  sortBy?: NoteSortField;
+  order?: SortOrder;
+  limit?: number;
 }
 
 export interface PaginationOptions {

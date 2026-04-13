@@ -19,6 +19,8 @@ export type {
   NoteContentPage,
   NoteId,
   NoteMeta,
+  NoteSortField,
   PaginationOptions,
   SearchOptions,
+  SortOrder,
 } from "./types.ts";

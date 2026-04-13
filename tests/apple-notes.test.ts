@@ -98,6 +98,87 @@ describe("notes", () => {
     expect(secret).toBeDefined();
     expect(secret?.isPasswordProtected).toBe(true);
   });
+
+  test("sorts by title ascending", () => {
+    const titles = db
+      .notes({ sortBy: "title", order: "asc" })
+      .map((n) => n.title);
+    expect(titles.length).toBeGreaterThan(1);
+    const sorted = [...titles].sort((a, b) => a.localeCompare(b));
+    expect(titles).toEqual(sorted);
+  });
+
+  test("sorts by title descending", () => {
+    const titles = db
+      .notes({ sortBy: "title", order: "desc" })
+      .map((n) => n.title);
+    expect(titles.length).toBeGreaterThan(1);
+    const sorted = [...titles].sort((a, b) => b.localeCompare(a));
+    expect(titles).toEqual(sorted);
+  });
+
+  test("sorts by createdAt ascending", () => {
+    const times = db
+      .notes({ sortBy: "createdAt", order: "asc" })
+      .map((n) => n.createdAt.getTime());
+    expect(times.length).toBeGreaterThan(1);
+    const sorted = [...times].sort((a, b) => a - b);
+    expect(times).toEqual(sorted);
+  });
+
+  test("defaults to modifiedAt descending", () => {
+    const times = db.notes().map((n) => n.modifiedAt.getTime());
+    expect(times.length).toBeGreaterThan(1);
+    const sorted = [...times].sort((a, b) => b - a);
+    expect(times).toEqual(sorted);
+  });
+
+  test("search filters by title", () => {
+    const notes = db.notes({ search: "Simple" });
+    expect(notes.length).toBeGreaterThan(0);
+    expect(notes.some((n) => n.title === "Simple Note")).toBe(true);
+  });
+
+  test("search is case-insensitive", () => {
+    const notes = db.notes({ search: "simple" });
+    expect(notes.some((n) => n.title === "Simple Note")).toBe(true);
+  });
+
+  test("search returns empty for non-matching query", () => {
+    const notes = db.notes({ search: "xyznonexistent123" });
+    expect(notes).toHaveLength(0);
+  });
+
+  test("search combined with folder filter", () => {
+    const notes = db.notes({ search: "Note", folder: "Work" });
+    for (const n of notes) {
+      expect(n.folderName).toBe("Work");
+    }
+  });
+
+  test("search combined with sort", () => {
+    const titles = db
+      .notes({ search: "Note", sortBy: "title", order: "asc" })
+      .map((n) => n.title);
+    expect(titles.length).toBeGreaterThan(1);
+    const sorted = [...titles].sort((a, b) => a.localeCompare(b));
+    expect(titles).toEqual(sorted);
+  });
+
+  test("limit restricts result count", () => {
+    const all = db.notes();
+    const limited = db.notes({ limit: 3 });
+    expect(limited).toHaveLength(3);
+    expect(limited.length).toBeLessThan(all.length);
+  });
+
+  test("limit with sort returns correct subset", () => {
+    const allSorted = db.notes({ sortBy: "title", order: "asc" });
+    const limited = db.notes({ sortBy: "title", order: "asc", limit: 2 });
+    expect(limited).toHaveLength(2);
+    expect(limited[0]?.title).toBe(allSorted[0]?.title);
+    expect(limited[1]?.title).toBe(allSorted[1]?.title);
+  });
 });
 
 // ============================================================================

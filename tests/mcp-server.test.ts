@@ -167,6 +167,63 @@ describe("list_notes", () => {
       expect(n.accountName).toBe("iCloud");
     }
   });
+
+  test("sorts by title ascending", async () => {
+    const result = await client.callTool({
+      name: "list_notes",
+      arguments: { sortBy: "title", order: "asc" },
+    });
+    const notes = parseResult(result);
+    for (let i = 1; i < notes.length; i++) {
+      expect(
+        notes[i].title.localeCompare(notes[i - 1].title),
+      ).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  test("filters by search text", async () => {
+    const result = await client.callTool({
+      name: "list_notes",
+      arguments: { search: "Simple" },
+    });
+    const notes = parseResult(result);
+    expect(notes.length).toBeGreaterThan(0);
+    expect(
+      notes.some((n: { title: string }) => n.title === "Simple Note"),
+    ).toBe(true);
+  });
+
+  test("applies limit", async () => {
+    const result = await client.callTool({
+      name: "list_notes",
+      arguments: { limit: 2 },
+    });
+    const notes = parseResult(result);
+    expect(notes.length).toBeLessThanOrEqual(2);
+  });
+
+  test("combines search, sort, folder, and limit", async () => {
+    const result = await client.callTool({
+      name: "list_notes",
+      arguments: {
+        search: "Note",
+        sortBy: "title",
+        order: "asc",
+        limit: 3,
+        folder: "Work",
+      },
+    });
+    const notes = parseResult(result);
+    expect(notes.length).toBeLessThanOrEqual(3);
+    for (const n of notes) {
+      expect(n.folderName).toBe("Work");
+    }
+    for (let i = 1; i < notes.length; i++) {
+      expect(
+        notes[i].title.localeCompare(notes[i - 1].title),
+      ).toBeGreaterThanOrEqual(0);
+    }
+  });
 });
 
 // ============================================================================
