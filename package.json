@@ -1,10 +1,30 @@
 {
   "name": "apple-notes-ts",
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "description": "TypeScript package for reading and searching Apple Notes on macOS via direct SQLite access. Includes markdown conversion and attachment support!",
   "module": "src/index.ts",
   "type": "module",
   "license": "MIT",
-  "private": true,
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/evantahler/apple-notes-ts.git"
+  },
+  "keywords": [
+    "apple-notes",
+    "macos",
+    "sqlite",
+    "typescript",
+    "notes"
+  ],
+  "author": "Evan Tahler",
   "scripts": {
     "test": "bun test",
     "lint": "tsc --noEmit && biome check .",
