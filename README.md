@@ -103,7 +103,6 @@ Tests run against a checked-in fixture database — no Full Disk Access needed.
 
 - **Read-only** — writing to the SQLite database directly risks iCloud sync corruption
 - **Password-protected notes** — cannot be decrypted; throws `PasswordProtectedError`
-- **Tables** — embedded tables use a separate CRDT-based protobuf format and are not yet converted to markdown
 
 ## License
 
