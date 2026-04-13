@@ -25,9 +25,10 @@ const db = new AppleNotes();
 const accounts = db.accounts();
 const folders = db.folders();
 
-// List all notes (or filter by folder)
+// List notes (filter, sort, search, limit)
 const allNotes = db.notes();
 const workNotes = db.notes({ folder: "Work" });
+const recent = db.notes({ search: "meeting", sortBy: "modifiedAt", order: "desc", limit: 10 });
 
 // Search by title or snippet
 const results = db.search("meeting notes");
@@ -74,7 +75,7 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 
 - **list_accounts** — List all Apple Notes accounts on this Mac
 - **list_folders** — List folders, optionally filtered by account
-- **list_notes** — List notes, optionally filtered by folder/account
+- **list_notes** — List notes with optional filtering (folder, account, text search), sorting (title, createdAt, modifiedAt), and limit
 - **search_notes** — Search notes by title and content
 - **read_note** — Read a note as markdown (supports pagination)
 - **list_attachments** — List attachments for a note
