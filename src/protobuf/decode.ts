@@ -127,14 +127,15 @@ function toDecodedRun(raw: Record<string, unknown>): DecodedAttributeRun {
 // Decode a ZMERGEABLEDATA1 blob into a simple table structure.
 // The blob is a gzipped MergableDataProto with CRDT entries for rows, columns, and cells.
 //
-// Table CRDT layout:
+// Table CRDT layout (real Apple Notes):
 //   Entry with custom_map type "com.apple.notes.ICTable" has map entries:
-//     crColumns → OrderedSet (column UUID indices in order)
-//     crRows    → OrderedSet (row UUID indices in order)
-//     cellColumns → Dictionary { colUuidIdx → Dictionary { rowUuidIdx → Note } }
+//     crColumns → OrderedSet (column UUIDs in display order)
+//     crRows    → OrderedSet (row UUIDs in display order)
+//     cellColumns → Dictionary { NSUUID(col) → Dictionary { NSUUID(row) → Note } }
 //
-// Both OrderedSet attachment.index and Dictionary key.unsigned_integer_value
-// are indices into the mergeable_data_object_uuid_item array.
+// Dictionary keys use objectIndex → NSUUID wrapper entry → UUIDIndex → uuid_item[].
+// OrderedSet attachments carry raw uuid bytes directly.
+// We match them by converting both to hex strings.
 export function decodeMergeableTable(
   blob: Buffer | Uint8Array,
 ): DecodedTable | null {
@@ -159,6 +160,7 @@ export function decodeMergeableTable(
       (data.mergeableDataObjectEntry as Record<string, unknown>[]) || [];
     const keys = (data.mergeableDataObjectKeyItem as string[]) || [];
     const types = (data.mergeableDataObjectTypeItem as string[]) || [];
+    const uuidItems = (data.mergeableDataObjectUuidItem as Uint8Array[]) || [];
 
     // Find the table root entry (custom_map with type "com.apple.notes.ICTable")
     const tableEntry = entries.find((e) => {
@@ -190,23 +192,36 @@ export function decodeMergeableTable(
     const cellColIdx = keyToObjectIndex.get("cellColumns");
     if (colIdx == null || rowIdx == null) return null;
 
-    // Get ordered UUID indices for columns and rows
-    const colUuidIndices = extractOrderedSetIndices(entries[colIdx]);
-    const rowUuidIndices = extractOrderedSetIndices(entries[rowIdx]);
-    if (colUuidIndices.length === 0 || rowUuidIndices.length === 0) return null;
+    // Get ordered UUID hex strings for columns and rows.
+    // The ordered set's attachment UUIDs are "internal" identifiers. The
+    // ordering.contents dictionary maps them to "external" UUIDs that the
+    // cellColumns dictionary uses as keys.
+    const colUuids = extractOrderedSetUuids(
+      entries[colIdx],
+      entries,
+      keys,
+      uuidItems,
+    );
+    const rowUuids = extractOrderedSetUuids(
+      entries[rowIdx],
+      entries,
+      keys,
+      uuidItems,
+    );
+    if (colUuids.length === 0 || rowUuids.length === 0) return null;
 
-    // Build cell map: "colUuidIdx:rowUuidIdx" → cell text
+    // Build cell map: "colUuidHex:rowUuidHex" → cell text
     const cellMap = new Map<string, string>();
     if (cellColIdx != null) {
-      buildCellMap(entries, cellColIdx, cellMap);
+      buildCellMap(entries, cellColIdx, keys, uuidItems, cellMap);
     }
 
     // Assemble rows
     const rows: string[][] = [];
-    for (const rowUuidIdx of rowUuidIndices) {
+    for (const rowUuid of rowUuids) {
       const row: string[] = [];
-      for (const colUuidIdx of colUuidIndices) {
-        row.push(cellMap.get(`${colUuidIdx}:${rowUuidIdx}`) ?? "");
+      for (const colUuid of colUuids) {
+        row.push(cellMap.get(`${colUuid}:${rowUuid}`) ?? "");
       }
       rows.push(row);
     }
@@ -217,11 +232,23 @@ export function decodeMergeableTable(
   }
 }
 
-// Extract ordered UUID indices from an OrderedSet entry.
-// Each attachment's `index` field is an index into uuid_item.
-function extractOrderedSetIndices(
+function uuidBytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// Extract ordered UUID hex strings from an OrderedSet.
+// The ordering.array.attachment gives the display order with internal UUIDs.
+// The ordering.contents dictionary maps internal UUIDs → external UUIDs
+// (the ones used as keys in cellColumns). If no contents mapping exists,
+// the internal UUIDs are used directly (simple/test case).
+function extractOrderedSetUuids(
   entry: Record<string, unknown> | undefined,
-): number[] {
+  entries: Record<string, unknown>[],
+  keys: string[],
+  uuidItems: Uint8Array[],
+): string[] {
   if (!entry) return [];
   const orderedSet = entry.orderedSet as Record<string, unknown> | undefined;
   if (!orderedSet) return [];
@@ -230,13 +257,94 @@ function extractOrderedSetIndices(
   const array = ordering.array as Record<string, unknown> | undefined;
   if (!array) return [];
   const attachments = (array.attachment as Record<string, unknown>[]) || [];
-  return attachments.map((a) => (a.index as number) ?? 0);
+
+  // Get internal UUIDs from attachment bytes
+  const internalUuids = attachments.map((a) => {
+    const uuid = a.uuid as Uint8Array | undefined;
+    return uuid ? uuidBytesToHex(uuid) : "";
+  });
+
+  // Build mapping from ordering.contents: internal UUID hex → external UUID hex
+  const contentsDict = ordering.contents as Record<string, unknown> | undefined;
+  if (!contentsDict) return internalUuids;
+
+  const contentsElements =
+    (contentsDict.element as Record<string, unknown>[]) || [];
+  const internalToExternal = new Map<string, string>();
+
+  for (const elem of contentsElements) {
+    const keyObj = elem.key as Record<string, unknown> | undefined;
+    const valObj = elem.value as Record<string, unknown> | undefined;
+    if (!keyObj || !valObj) continue;
+
+    const internalHex = resolveObjectIdToUuidHex(
+      keyObj,
+      entries,
+      keys,
+      uuidItems,
+    );
+    const externalHex = resolveObjectIdToUuidHex(
+      valObj,
+      entries,
+      keys,
+      uuidItems,
+    );
+    if (internalHex && externalHex) {
+      internalToExternal.set(internalHex, externalHex);
+    }
+  }
+
+  if (internalToExternal.size === 0) return internalUuids;
+
+  // Map internal → external, falling back to internal if no mapping exists
+  return internalUuids.map((uuid) => internalToExternal.get(uuid) ?? uuid);
 }
 
-// Navigate cellColumns: Dictionary { colUuidIdx → Dict { rowUuidIdx → Note } }
+// Resolve an ObjectID to a UUID hex string.
+// Dictionary keys can be either:
+//   - unsignedIntegerValue: direct index into uuid_item
+//   - objectIndex: points to an NSUUID wrapper entry with a UUIDIndex map value
+function resolveObjectIdToUuidHex(
+  objId: Record<string, unknown>,
+  entries: Record<string, unknown>[],
+  keys: string[],
+  uuidItems: Uint8Array[],
+): string | null {
+  // Direct uuid_item index
+  const directIdx = objId.unsignedIntegerValue as number | undefined;
+  if (directIdx != null && uuidItems[directIdx]) {
+    return uuidBytesToHex(uuidItems[directIdx]);
+  }
+
+  // Indirect: objectIndex → NSUUID entry → UUIDIndex → uuid_item
+  const entryIdx = objId.objectIndex as number | undefined;
+  if (entryIdx == null) return null;
+  const entry = entries[entryIdx];
+  if (!entry) return null;
+
+  const cm = entry.customMap as Record<string, unknown> | undefined;
+  if (!cm) return null;
+  const mes = (cm.mapEntry as Record<string, unknown>[]) || [];
+  for (const me of mes) {
+    const keyIdx = me.key as number | undefined;
+    if (keyIdx == null) continue;
+    if (keys[keyIdx] === "UUIDIndex") {
+      const val = me.value as Record<string, unknown> | undefined;
+      const uuidIdx = val?.unsignedIntegerValue as number | undefined;
+      if (uuidIdx != null && uuidItems[uuidIdx]) {
+        return uuidBytesToHex(uuidItems[uuidIdx]);
+      }
+    }
+  }
+  return null;
+}
+
+// Navigate cellColumns: Dictionary { col UUID → Dictionary { row UUID → Note } }
 function buildCellMap(
   entries: Record<string, unknown>[],
   cellColIdx: number,
+  keys: string[],
+  uuidItems: Uint8Array[],
   cellMap: Map<string, string>,
 ): void {
   const cellColEntry = entries[cellColIdx];
@@ -244,16 +352,15 @@ function buildCellMap(
 
   const dict = cellColEntry.dictionary as Record<string, unknown> | undefined;
   if (!dict) return;
-  const elements = (dict.element as Record<string, unknown>[]) || [];
 
-  for (const elem of elements) {
+  for (const elem of (dict.element as Record<string, unknown>[]) || []) {
     const colKey = elem.key as Record<string, unknown> | undefined;
     const colValue = elem.value as Record<string, unknown> | undefined;
     if (!colKey || !colValue) continue;
 
-    const colUuidIdx = colKey.unsignedIntegerValue as number | undefined;
+    const colUuid = resolveObjectIdToUuidHex(colKey, entries, keys, uuidItems);
     const colObjIdx = colValue.objectIndex as number | undefined;
-    if (colUuidIdx == null || colObjIdx == null) continue;
+    if (!colUuid || colObjIdx == null) continue;
 
     const rowDictEntry = entries[colObjIdx];
     if (!rowDictEntry) continue;
@@ -269,9 +376,14 @@ function buildCellMap(
       const rowValue = rowElem.value as Record<string, unknown> | undefined;
       if (!rowKey || !rowValue) continue;
 
-      const rowUuidIdx = rowKey.unsignedIntegerValue as number | undefined;
+      const rowUuid = resolveObjectIdToUuidHex(
+        rowKey,
+        entries,
+        keys,
+        uuidItems,
+      );
       const cellObjIdx = rowValue.objectIndex as number | undefined;
-      if (rowUuidIdx == null || cellObjIdx == null) continue;
+      if (!rowUuid || cellObjIdx == null) continue;
 
       const cellEntry = entries[cellObjIdx];
       if (!cellEntry) continue;
@@ -280,7 +392,7 @@ function buildCellMap(
       if (!cellNote) continue;
 
       const noteText = (cellNote.noteText as string) || "";
-      cellMap.set(`${colUuidIdx}:${rowUuidIdx}`, noteText.replace(/\n$/, ""));
+      cellMap.set(`${colUuid}:${rowUuid}`, noteText.replace(/\n$/, ""));
     }
   }
 }
