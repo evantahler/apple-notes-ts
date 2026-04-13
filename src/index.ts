@@ -2,6 +2,7 @@ export type { AppleNotesOptions } from "./apple-notes.ts";
 export { AppleNotes } from "./apple-notes.ts";
 export {
   AppleNotesError,
+  DatabaseAccessDeniedError,
   DatabaseNotFoundError,
   NoteNotFoundError,
   PasswordProtectedError,

@@ -25,3 +25,13 @@ export class DatabaseNotFoundError extends AppleNotesError {
     this.name = "DatabaseNotFoundError";
   }
 }
+
+export class DatabaseAccessDeniedError extends AppleNotesError {
+  constructor(path: string) {
+    super(
+      `Access denied to NoteStore database: ${path}\n` +
+        `Grant Full Disk Access to your terminal app in System Settings → Privacy & Security → Full Disk Access.`,
+    );
+    this.name = "DatabaseAccessDeniedError";
+  }
+}
