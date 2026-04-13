@@ -42,7 +42,8 @@ const readable = allNotes.filter((n) => !n.isPasswordProtected);
 if (readable.length === 0) {
   console.log("No readable notes found.");
 } else {
-  const pick = readable[Math.floor(Math.random() * readable.length)]!;
+  const pick = readable[Math.floor(Math.random() * readable.length)];
+  if (!pick) throw new Error("unreachable");
   console.log(`--- Random note: "${pick.title}" ---`);
   console.log();
 
@@ -55,7 +56,9 @@ if (readable.length === 0) {
     console.log();
     console.log(`Attachments (${attachments.length}):`);
     for (const a of attachments) {
-      console.log(`  - ${a.name} (${a.contentType}) → ${a.url ?? "unresolved"}`);
+      console.log(
+        `  - ${a.name} (${a.contentType}) → ${a.url ?? "unresolved"}`,
+      );
     }
   }
 }

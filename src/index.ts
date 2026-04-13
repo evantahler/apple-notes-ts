@@ -1,23 +1,23 @@
-export { AppleNotes } from "./apple-notes.ts";
 export type { AppleNotesOptions } from "./apple-notes.ts";
-export type {
-  NoteId,
-  FolderId,
-  AccountId,
-  AttachmentId,
-  Account,
-  Folder,
-  NoteMeta,
-  NoteContent,
-  NoteContentPage,
-  AttachmentRef,
-  SearchOptions,
-  ListNotesOptions,
-  PaginationOptions,
-} from "./types.ts";
+export { AppleNotes } from "./apple-notes.ts";
 export {
   AppleNotesError,
+  DatabaseNotFoundError,
   NoteNotFoundError,
   PasswordProtectedError,
-  DatabaseNotFoundError,
 } from "./errors.ts";
+export type {
+  Account,
+  AccountId,
+  AttachmentId,
+  AttachmentRef,
+  Folder,
+  FolderId,
+  ListNotesOptions,
+  NoteContent,
+  NoteContentPage,
+  NoteId,
+  NoteMeta,
+  PaginationOptions,
+  SearchOptions,
+} from "./types.ts";

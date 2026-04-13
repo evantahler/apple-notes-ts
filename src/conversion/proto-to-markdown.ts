@@ -1,12 +1,12 @@
-import type { DecodedNote, DecodedAttributeRun } from "../protobuf/decode.ts";
+import type { DecodedAttributeRun, DecodedNote } from "../protobuf/decode.ts";
 
 // ParagraphStyle.style_type values (from notestore.proto)
 const STYLE_TITLE = 0;
 const STYLE_HEADING = 1;
 const STYLE_SUBHEADING = 2;
 const STYLE_MONOSPACED = 4;
-const STYLE_DOTTED_LIST = 100;  // bullet (dotted)
-const STYLE_DASHED_LIST = 101;  // bullet (dashed)
+const STYLE_DOTTED_LIST = 100; // bullet (dotted)
+const STYLE_DASHED_LIST = 101; // bullet (dashed)
 const STYLE_NUMBERED_LIST = 102;
 const STYLE_CHECKLIST = 103;
 
@@ -201,7 +201,8 @@ function renderInlineFormatting(
       // font_weight: 1=bold, 2=italic, 3=bold+italic
       const fw = run.fontWeight ?? 0;
       const isBold = fw === FONT_WEIGHT_BOLD || fw === FONT_WEIGHT_BOLD_ITALIC;
-      const isItalic = fw === FONT_WEIGHT_ITALIC || fw === FONT_WEIGHT_BOLD_ITALIC;
+      const isItalic =
+        fw === FONT_WEIGHT_ITALIC || fw === FONT_WEIGHT_BOLD_ITALIC;
 
       if (isBold && isItalic) {
         formatted = `***${formatted}***`;

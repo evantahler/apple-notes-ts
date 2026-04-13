@@ -6,9 +6,9 @@
  */
 
 import { Database } from "bun:sqlite";
-import { gzipSync } from "node:zlib";
-import { resolve, dirname } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { gzipSync } from "node:zlib";
 import protobuf from "protobufjs";
 
 const FIXTURE_DIR = dirname(new URL(import.meta.url).pathname);
@@ -195,9 +195,15 @@ function attachmentRun(
 try {
   Bun.file(DB_PATH).delete;
   const { unlinkSync } = await import("node:fs");
-  try { unlinkSync(DB_PATH); } catch {}
-  try { unlinkSync(DB_PATH + "-wal"); } catch {}
-  try { unlinkSync(DB_PATH + "-shm"); } catch {}
+  try {
+    unlinkSync(DB_PATH);
+  } catch {}
+  try {
+    unlinkSync(`${DB_PATH}-wal`);
+  } catch {}
+  try {
+    unlinkSync(`${DB_PATH}-shm`);
+  } catch {}
 } catch {}
 
 const db = new Database(DB_PATH);
@@ -373,12 +379,9 @@ insertNote({
   folderId: 10,
   createdAt: lastMonth,
   modifiedAt: lastWeek,
-  noteText: "Simple Note\nThis is a simple plain text note.\nIt has multiple lines.\n",
-  attributeRuns: [
-    titleRun(12),
-    bodyRun(34),
-    bodyRun(23),
-  ],
+  noteText:
+    "Simple Note\nThis is a simple plain text note.\nIt has multiple lines.\n",
+  attributeRuns: [titleRun(12), bodyRun(34), bodyRun(23)],
 });
 
 // Note 2: Rich formatting
@@ -391,7 +394,8 @@ insertNote({
   folderId: 10,
   createdAt: lastWeek,
   modifiedAt: yesterday,
-  noteText: "Formatted Note\nThis has bold and italic and bold italic text.\nAlso strikethrough and underline.\n",
+  noteText:
+    "Formatted Note\nThis has bold and italic and bold italic text.\nAlso strikethrough and underline.\n",
   attributeRuns: [
     titleRun(15),
     bodyRun(9),
@@ -418,10 +422,10 @@ insertNote({
   modifiedAt: now,
   noteText: "Headings Test\nMain Section\nSub Section\nBody text here.\n",
   attributeRuns: [
-    titleRun(14),       // "Headings Test\n"
-    headingRun(13),     // "Main Section\n"
-    subheadingRun(12),  // "Sub Section\n"
-    bodyRun(16),        // "Body text here.\n"
+    titleRun(14), // "Headings Test\n"
+    headingRun(13), // "Main Section\n"
+    subheadingRun(12), // "Sub Section\n"
+    bodyRun(16), // "Body text here.\n"
   ],
 });
 
@@ -432,14 +436,15 @@ insertNote({
   folderId: 11,
   createdAt: yesterday,
   modifiedAt: now,
-  noteText: "Lists Note\nFirst bullet\nSecond bullet\nNested bullet\nFirst numbered\nSecond numbered\n",
+  noteText:
+    "Lists Note\nFirst bullet\nSecond bullet\nNested bullet\nFirst numbered\nSecond numbered\n",
   attributeRuns: [
-    titleRun(11),           // "Lists Note\n"
-    bulletRun(13),          // "First bullet\n"
-    bulletRun(14),          // "Second bullet\n"
-    bulletRun(14, 1),       // "Nested bullet\n" (indent=1)
-    numberedRun(15),        // "First numbered\n"
-    numberedRun(16),        // "Second numbered\n"
+    titleRun(11), // "Lists Note\n"
+    bulletRun(13), // "First bullet\n"
+    bulletRun(14), // "Second bullet\n"
+    bulletRun(14, 1), // "Nested bullet\n" (indent=1)
+    numberedRun(15), // "First numbered\n"
+    numberedRun(16), // "Second numbered\n"
   ],
 });
 
@@ -452,11 +457,11 @@ insertNote({
   modifiedAt: now,
   noteText: "Todo List\nBuy groceries\nClean house\nWrite code\nReview PR\n",
   attributeRuns: [
-    titleRun(10),               // "Todo List\n"
-    checklistRun(14, true),     // "Buy groceries\n" (done)
-    checklistRun(12, false),    // "Clean house\n" (not done)
-    checklistRun(11, true),     // "Write code\n" (done)
-    checklistRun(10, false),    // "Review PR\n" (not done)
+    titleRun(10), // "Todo List\n"
+    checklistRun(14, true), // "Buy groceries\n" (done)
+    checklistRun(12, false), // "Clean house\n" (not done)
+    checklistRun(11, true), // "Write code\n" (done)
+    checklistRun(10, false), // "Review PR\n" (not done)
   ],
 });
 
@@ -468,7 +473,8 @@ insertNote({
   folderId: 10,
   createdAt: lastWeek,
   modifiedAt: yesterday,
-  noteText: "Code Example\nHere is some code:\nfunction hello() {\n  return 'world';\n}\nAnd that's it.\n",
+  noteText:
+    "Code Example\nHere is some code:\nfunction hello() {\n  return 'world';\n}\nAnd that's it.\n",
   attributeRuns: [
     titleRun(13),
     bodyRun(19),
@@ -486,15 +492,16 @@ insertNote({
   folderId: 12,
   createdAt: lastMonth,
   modifiedAt: lastWeek,
-  noteText: "Links Note\nVisit Example for more info.\nAlso check Other Site.\n",
+  noteText:
+    "Links Note\nVisit Example for more info.\nAlso check Other Site.\n",
   attributeRuns: [
-    titleRun(11),                                    // "Links Note\n"
-    bodyRun(6),                                      // "Visit "
-    linkRun(7, "https://example.com"),               // "Example"
-    bodyRun(16),                                     // " for more info.\n"
-    bodyRun(11),                                     // "Also check "
-    linkRun(10, "https://other-site.com"),            // "Other Site"
-    bodyRun(2),                                      // ".\n"
+    titleRun(11), // "Links Note\n"
+    bodyRun(6), // "Visit "
+    linkRun(7, "https://example.com"), // "Example"
+    bodyRun(16), // " for more info.\n"
+    bodyRun(11), // "Also check "
+    linkRun(10, "https://other-site.com"), // "Other Site"
+    bodyRun(2), // ".\n"
   ],
 });
 
@@ -506,13 +513,9 @@ insertNote({
   folderId: 12,
   createdAt: lastWeek,
   modifiedAt: yesterday,
-  noteText: "Quotes Note\nSomeone once said:\nTo be or not to be.\nThat is the question.\n",
-  attributeRuns: [
-    titleRun(12),
-    bodyRun(19),
-    blockQuoteRun(20),
-    bodyRun(22),
-  ],
+  noteText:
+    "Quotes Note\nSomeone once said:\nTo be or not to be.\nThat is the question.\n",
+  attributeRuns: [titleRun(12), bodyRun(19), blockQuoteRun(20), bodyRun(22)],
 });
 
 // Note 9: Large note (for pagination tests)
@@ -523,7 +526,7 @@ for (let i = 1; i <= 500; i++) {
   largeLines.push(line);
   largeRuns.push(bodyRun(line.length + 1)); // +1 for \n
 }
-const largeText = largeLines.join("\n") + "\n";
+const largeText = `${largeLines.join("\n")}\n`;
 
 insertNote({
   title: "Large Note",
@@ -558,10 +561,10 @@ insertNote({
   modifiedAt: now,
   noteText: "Note With Image\nHere is an image:\n\uFFFCAnd some text after.\n",
   attributeRuns: [
-    titleRun(16),                                       // "Note With Image\n"
-    bodyRun(18),                                        // "Here is an image:\n"
-    attachmentRun(attachmentId, "public.jpeg"),          // U+FFFC
-    bodyRun(21),                                        // "And some text after.\n"
+    titleRun(16), // "Note With Image\n"
+    bodyRun(18), // "Here is an image:\n"
+    attachmentRun(attachmentId, "public.jpeg"), // U+FFFC
+    bodyRun(21), // "And some text after.\n"
   ],
 });
 
@@ -581,12 +584,7 @@ insertNote({
   createdAt: now,
   modifiedAt: now,
   noteText: "Inline Code Note\nUse the console.log function in your code.\n",
-  attributeRuns: [
-    titleRun(17),
-    bodyRun(8),
-    inlineCodeRun(11),
-    bodyRun(24),
-  ],
+  attributeRuns: [titleRun(17), bodyRun(8), inlineCodeRun(11), bodyRun(24)],
 });
 
 // ============================================================================
@@ -595,10 +593,7 @@ insertNote({
 
 const attachDir = resolve(FIXTURE_DIR, "Accounts", attachmentId);
 mkdirSync(attachDir, { recursive: true });
-writeFileSync(
-  resolve(attachDir, "photo.jpg"),
-  "fake-jpeg-data-for-testing",
-);
+writeFileSync(resolve(attachDir, "photo.jpg"), "fake-jpeg-data-for-testing");
 
 // ============================================================================
 // Done

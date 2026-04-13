@@ -7,11 +7,13 @@
   "private": true,
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit && biome check .",
+    "format": "biome check --write .",
     "example": "bun run example.ts",
     "create-fixture": "bun run tests/fixtures/create-test-db.ts"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.11",
     "@types/bun": "latest"
   },
   "peerDependencies": {

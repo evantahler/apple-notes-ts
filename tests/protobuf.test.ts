@@ -1,7 +1,7 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import protobuf from "protobufjs";
-import { resolve } from "node:path";
 import { decodeNoteData } from "../src/protobuf/decode.ts";
 
 const PROTO_PATH = resolve(import.meta.dir, "../src/protobuf/notestore.proto");
@@ -28,7 +28,7 @@ describe("decodeNoteData", () => {
 
     expect(result.text).toBe("Hello world\n");
     expect(result.attributeRuns).toHaveLength(1);
-    expect(result.attributeRuns[0]!.length).toBe(12);
+    expect(result.attributeRuns[0]?.length).toBe(12);
   });
 
   test("decodes empty note", () => {
@@ -48,7 +48,7 @@ describe("decodeNoteData", () => {
     const result = decodeNoteData(zdata);
 
     expect(result.attributeRuns).toHaveLength(3);
-    expect(result.attributeRuns[1]!.fontWeight).toBe(1);
+    expect(result.attributeRuns[1]?.fontWeight).toBe(1);
   });
 
   test("decodes note with italic formatting", () => {
@@ -59,7 +59,7 @@ describe("decodeNoteData", () => {
     ]);
     const result = decodeNoteData(zdata);
 
-    expect(result.attributeRuns[1]!.fontWeight).toBe(2);
+    expect(result.attributeRuns[1]?.fontWeight).toBe(2);
   });
 
   test("decodes note with bold+italic formatting", () => {
@@ -70,7 +70,7 @@ describe("decodeNoteData", () => {
     ]);
     const result = decodeNoteData(zdata);
 
-    expect(result.attributeRuns[1]!.fontWeight).toBe(3);
+    expect(result.attributeRuns[1]?.fontWeight).toBe(3);
   });
 
   test("decodes paragraph styles", () => {
@@ -81,9 +81,9 @@ describe("decodeNoteData", () => {
     ]);
     const result = decodeNoteData(zdata);
 
-    expect(result.attributeRuns[0]!.paragraphStyle?.styleType).toBe(0);
-    expect(result.attributeRuns[1]!.paragraphStyle?.styleType).toBe(1);
-    expect(result.attributeRuns[2]!.paragraphStyle).toBeUndefined();
+    expect(result.attributeRuns[0]?.paragraphStyle?.styleType).toBe(0);
+    expect(result.attributeRuns[1]?.paragraphStyle?.styleType).toBe(1);
+    expect(result.attributeRuns[2]?.paragraphStyle).toBeUndefined();
   });
 
   test("decodes checklist items", () => {
@@ -106,8 +106,8 @@ describe("decodeNoteData", () => {
     ]);
     const result = decodeNoteData(zdata);
 
-    expect(result.attributeRuns[0]!.paragraphStyle?.checklist?.done).toBe(1);
-    expect(result.attributeRuns[1]!.paragraphStyle?.checklist?.done).toBe(0);
+    expect(result.attributeRuns[0]?.paragraphStyle?.checklist?.done).toBe(1);
+    expect(result.attributeRuns[1]?.paragraphStyle?.checklist?.done).toBe(0);
   });
 
   test("decodes strikethrough and underline", () => {
@@ -117,8 +117,8 @@ describe("decodeNoteData", () => {
     ]);
     const result = decodeNoteData(zdata);
 
-    expect(result.attributeRuns[0]!.strikethrough).toBe(1);
-    expect(result.attributeRuns[1]!.underlined).toBe(1);
+    expect(result.attributeRuns[0]?.strikethrough).toBe(1);
+    expect(result.attributeRuns[1]?.underlined).toBe(1);
   });
 
   test("decodes links", () => {
@@ -128,7 +128,7 @@ describe("decodeNoteData", () => {
     ]);
     const result = decodeNoteData(zdata);
 
-    expect(result.attributeRuns[0]!.link).toBe("https://example.com");
+    expect(result.attributeRuns[0]?.link).toBe("https://example.com");
   });
 
   test("decodes attachment info", () => {
@@ -144,10 +144,10 @@ describe("decodeNoteData", () => {
     ]);
     const result = decodeNoteData(zdata);
 
-    expect(result.attributeRuns[0]!.attachmentInfo?.attachmentIdentifier).toBe(
+    expect(result.attributeRuns[0]?.attachmentInfo?.attachmentIdentifier).toBe(
       "UUID-123",
     );
-    expect(result.attributeRuns[0]!.attachmentInfo?.typeUti).toBe(
+    expect(result.attributeRuns[0]?.attachmentInfo?.typeUti).toBe(
       "public.jpeg",
     );
   });
@@ -159,7 +159,7 @@ describe("decodeNoteData", () => {
     ]);
     const result = decodeNoteData(zdata);
 
-    expect(result.attributeRuns[0]!.font?.fontHints).toBe(1);
+    expect(result.attributeRuns[0]?.font?.fontHints).toBe(1);
   });
 
   test("decodes block quote", () => {
@@ -168,7 +168,7 @@ describe("decodeNoteData", () => {
     ]);
     const result = decodeNoteData(zdata);
 
-    expect(result.attributeRuns[0]!.paragraphStyle?.blockQuote).toBe(1);
+    expect(result.attributeRuns[0]?.paragraphStyle?.blockQuote).toBe(1);
   });
 
   test("decodes indent amount", () => {
@@ -180,14 +180,12 @@ describe("decodeNoteData", () => {
     ]);
     const result = decodeNoteData(zdata);
 
-    expect(result.attributeRuns[0]!.paragraphStyle?.indentAmount).toBe(2);
+    expect(result.attributeRuns[0]?.paragraphStyle?.indentAmount).toBe(2);
   });
 
   test("handles missing document gracefully", () => {
     const msg = NoteStoreProto.create({});
-    const zdata = Buffer.from(
-      gzipSync(NoteStoreProto.encode(msg).finish()),
-    );
+    const zdata = Buffer.from(gzipSync(NoteStoreProto.encode(msg).finish()));
     const result = decodeNoteData(zdata);
 
     expect(result.text).toBe("");

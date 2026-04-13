@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { existsSync } from "node:fs";
 import { DatabaseNotFoundError } from "../errors.ts";
 
 const DEFAULT_DB_PATH = join(
@@ -18,7 +18,7 @@ export function openDatabase(dbPath?: string): Database {
 
   try {
     return new Database(path, { readonly: true });
-  } catch (error) {
+  } catch (_error) {
     throw new DatabaseNotFoundError(path);
   }
 }

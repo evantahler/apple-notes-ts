@@ -1,6 +1,6 @@
+import { resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 import protobuf from "protobufjs";
-import { resolve } from "node:path";
 
 export interface DecodedNote {
   text: string;
@@ -90,11 +90,14 @@ function toDecodedRun(raw: Record<string, unknown>): DecodedAttributeRun {
 
   if (raw.fontWeight != null) run.fontWeight = raw.fontWeight as number;
   if (raw.underlined != null) run.underlined = raw.underlined as number;
-  if (raw.strikethrough != null) run.strikethrough = raw.strikethrough as number;
+  if (raw.strikethrough != null)
+    run.strikethrough = raw.strikethrough as number;
   if (raw.superscript != null) run.superscript = raw.superscript as number;
   if (raw.link != null) run.link = raw.link as string;
-  if (raw.unknownIdentifier != null) run.unknownIdentifier = raw.unknownIdentifier as number;
-  if (raw.emphasisStyle != null) run.emphasisStyle = raw.emphasisStyle as number;
+  if (raw.unknownIdentifier != null)
+    run.unknownIdentifier = raw.unknownIdentifier as number;
+  if (raw.emphasisStyle != null)
+    run.emphasisStyle = raw.emphasisStyle as number;
 
   const color = raw.color as Record<string, unknown> | undefined;
   if (color) {

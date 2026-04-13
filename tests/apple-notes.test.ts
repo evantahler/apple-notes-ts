@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { AppleNotes } from "../src/index.ts";
 import { NoteNotFoundError, PasswordProtectedError } from "../src/errors.ts";
+import { AppleNotes } from "../src/index.ts";
 
 const FIXTURE_DB = resolve(import.meta.dir, "fixtures/NoteStore.sqlite");
 const FIXTURE_DIR = resolve(import.meta.dir, "fixtures");
@@ -54,13 +54,13 @@ describe("folders", () => {
     const folders = db.folders();
     const workFolder = folders.find((f) => f.name === "Work");
     expect(workFolder).toBeDefined();
-    expect(workFolder!.accountName).toBe("iCloud");
+    expect(workFolder?.accountName).toBe("iCloud");
   });
 
   test("filters by account name", () => {
     const folders = db.folders("On My Mac");
     expect(folders).toHaveLength(1);
-    expect(folders[0]!.name).toBe("Personal");
+    expect(folders[0]?.name).toBe("Personal");
   });
 });
 
@@ -86,17 +86,17 @@ describe("notes", () => {
     const notes = db.notes();
     const simple = notes.find((n) => n.title === "Simple Note");
     expect(simple).toBeDefined();
-    expect(simple!.snippet).toBeTruthy();
-    expect(simple!.createdAt).toBeInstanceOf(Date);
-    expect(simple!.modifiedAt).toBeInstanceOf(Date);
-    expect(simple!.isPasswordProtected).toBe(false);
+    expect(simple?.snippet).toBeTruthy();
+    expect(simple?.createdAt).toBeInstanceOf(Date);
+    expect(simple?.modifiedAt).toBeInstanceOf(Date);
+    expect(simple?.isPasswordProtected).toBe(false);
   });
 
   test("password protected note has flag set", () => {
     const notes = db.notes();
     const secret = notes.find((n) => n.title === "Secret Note");
     expect(secret).toBeDefined();
-    expect(secret!.isPasswordProtected).toBe(true);
+    expect(secret?.isPasswordProtected).toBe(true);
   });
 });
 
@@ -209,7 +209,9 @@ describe("read", () => {
 
   test("reads attachment placeholders", () => {
     const content = db.read(110);
-    expect(content.markdown).toContain("![attachment](attachment:ATTACH-UUID-001");
+    expect(content.markdown).toContain(
+      "![attachment](attachment:ATTACH-UUID-001",
+    );
   });
 
   test("throws NoteNotFoundError for missing note", () => {
@@ -281,7 +283,7 @@ describe("getAttachments", () => {
     // Note 110 has an attachment
     const attachments = db.getAttachments(110);
     expect(attachments.length).toBeGreaterThan(0);
-    expect(attachments[0]!.contentType).toBe("public.jpeg");
+    expect(attachments[0]?.contentType).toBe("public.jpeg");
   });
 
   test("returns empty array for note without attachments", () => {

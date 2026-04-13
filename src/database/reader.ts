@@ -1,11 +1,11 @@
 import type { Database } from "bun:sqlite";
 import type {
   Account,
-  Folder,
-  NoteMeta,
   AttachmentRef,
-  SearchOptions,
+  Folder,
   ListNotesOptions,
+  NoteMeta,
+  SearchOptions,
 } from "../types.ts";
 import * as Q from "./queries.ts";
 
@@ -166,7 +166,9 @@ export class NoteReader {
     return results;
   }
 
-  listNotes(options?: ListNotesOptions): { meta: NoteMeta; zdata: Buffer | null }[] {
+  listNotes(
+    options?: ListNotesOptions,
+  ): { meta: NoteMeta; zdata: Buffer | null }[] {
     const rows = this.db
       .query(Q.LIST_NOTES)
       .all(this.entityTypes.note) as NoteRow[];
@@ -179,7 +181,7 @@ export class NoteReader {
     if (options?.folder) {
       results = results.filter(
         (r) =>
-          r.meta.folderName.toLowerCase() === options.folder!.toLowerCase() ||
+          r.meta.folderName.toLowerCase() === options.folder?.toLowerCase() ||
           r.meta.folderId === Number(options.folder),
       );
     }
@@ -187,7 +189,7 @@ export class NoteReader {
     if (options?.account) {
       results = results.filter(
         (r) =>
-          r.meta.accountName.toLowerCase() === options.account!.toLowerCase() ||
+          r.meta.accountName.toLowerCase() === options.account?.toLowerCase() ||
           r.meta.accountId === Number(options.account),
       );
     }
@@ -204,10 +206,7 @@ export class NoteReader {
     };
   }
 
-  search(
-    query: string,
-    options?: SearchOptions,
-  ): NoteMeta[] {
+  search(query: string, options?: SearchOptions): NoteMeta[] {
     const pattern = `%${query}%`;
     const limit = options?.limit ?? 50;
 
@@ -220,7 +219,7 @@ export class NoteReader {
     if (options?.folder) {
       results = results.filter(
         (r) =>
-          r.folderName.toLowerCase() === options.folder!.toLowerCase() ||
+          r.folderName.toLowerCase() === options.folder?.toLowerCase() ||
           r.folderId === Number(options.folder),
       );
     }

@@ -1,6 +1,9 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { noteToMarkdown } from "../src/conversion/proto-to-markdown.ts";
-import type { DecodedNote, DecodedAttributeRun } from "../src/protobuf/decode.ts";
+import type {
+  DecodedAttributeRun,
+  DecodedNote,
+} from "../src/protobuf/decode.ts";
 
 function note(text: string, runs: DecodedAttributeRun[]): DecodedNote {
   return { text, attributeRuns: runs };
@@ -12,9 +15,7 @@ describe("noteToMarkdown", () => {
   });
 
   test("renders plain text", () => {
-    const md = noteToMarkdown(
-      note("Hello world\n", [{ length: 12 }]),
-    );
+    const md = noteToMarkdown(note("Hello world\n", [{ length: 12 }]));
     expect(md).toBe("Hello world");
   });
 

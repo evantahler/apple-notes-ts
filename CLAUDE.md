@@ -7,7 +7,8 @@ apple-notes-ts — TypeScript package for reading and searching Apple Notes on m
 ## Commands
 
 - `bun test` — Run all tests (74 tests against fixture DB, no Full Disk Access needed)
-- `bun run typecheck` — TypeScript type checking
+- `bun run lint` — TypeScript type checking + Biome linting/format checking
+- `bun run format` — Auto-fix lint issues and reformat with Biome
 - `bun example` — List notes on this machine and display one at random (requires Full Disk Access)
 - `bun run create-fixture` — Regenerate the test fixture database
 

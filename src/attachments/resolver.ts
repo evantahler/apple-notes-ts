@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import { homedir } from "node:os";
+import { join } from "node:path";
 
 const DEFAULT_CONTAINER_PATH = join(
   homedir(),
@@ -45,7 +45,10 @@ export class AttachmentResolver {
           // Recurse one level only to avoid excessive scanning
           const subEntries = readdirSync(fullPath, { withFileTypes: true });
           for (const sub of subEntries) {
-            if (sub.isDirectory() && (sub.name === identifier || sub.name.includes(identifier))) {
+            if (
+              sub.isDirectory() &&
+              (sub.name === identifier || sub.name.includes(identifier))
+            ) {
               const subPath = join(fullPath, sub.name);
               const files = readdirSync(subPath, { withFileTypes: true });
               const file = files.find((f) => f.isFile());

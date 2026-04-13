@@ -1,23 +1,20 @@
 import type { Database } from "bun:sqlite";
+import { AttachmentResolver } from "./attachments/resolver.ts";
+import { noteToMarkdown } from "./conversion/proto-to-markdown.ts";
 import { openDatabase } from "./database/connection.ts";
 import { NoteReader } from "./database/reader.ts";
+import { NoteNotFoundError, PasswordProtectedError } from "./errors.ts";
 import { decodeNoteData } from "./protobuf/decode.ts";
-import { noteToMarkdown } from "./conversion/proto-to-markdown.ts";
-import { AttachmentResolver } from "./attachments/resolver.ts";
-import {
-  NoteNotFoundError,
-  PasswordProtectedError,
-} from "./errors.ts";
 import type {
   Account,
+  AttachmentRef,
   Folder,
-  NoteMeta,
+  ListNotesOptions,
   NoteContent,
   NoteContentPage,
-  AttachmentRef,
-  SearchOptions,
-  ListNotesOptions,
+  NoteMeta,
   PaginationOptions,
+  SearchOptions,
 } from "./types.ts";
 
 export interface AppleNotesOptions {
