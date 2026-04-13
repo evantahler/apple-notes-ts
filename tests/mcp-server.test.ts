@@ -71,8 +71,8 @@ describe("server metadata", () => {
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
       "get_attachment_url",
-      "get_attachments",
       "list_accounts",
+      "list_attachments",
       "list_folders",
       "list_notes",
       "read_note",
@@ -271,10 +271,10 @@ describe("read_note", () => {
 });
 
 // ============================================================================
-// get_attachments
+// list_attachments
 // ============================================================================
 
-describe("get_attachments", () => {
+describe("list_attachments", () => {
   test("returns attachments for a note", async () => {
     const listResult = await client.callTool({
       name: "list_notes",
@@ -282,7 +282,7 @@ describe("get_attachments", () => {
     });
     const notes = parseResult(listResult);
     const result = await client.callTool({
-      name: "get_attachments",
+      name: "list_attachments",
       arguments: { noteId: notes[0].id },
     });
     const attachments = parseResult(result);
@@ -372,10 +372,10 @@ describe("input validation", () => {
     }
   });
 
-  test("get_attachments rejects missing noteId", async () => {
+  test("list_attachments rejects missing noteId", async () => {
     try {
       const result = await client.callTool({
-        name: "get_attachments",
+        name: "list_attachments",
         arguments: {},
       });
       expect(result.isError).toBe(true);

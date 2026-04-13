@@ -175,7 +175,7 @@ export function createServer(options?: AppleNotesOptions) {
   );
 
   server.registerTool(
-    "get_attachments",
+    "list_attachments",
     {
       description:
         "List all attachments (images, files, etc.) for a specific note. Returns each attachment's name, content type, and local file URL if available.",
@@ -188,7 +188,7 @@ export function createServer(options?: AppleNotesOptions) {
     },
     async ({ noteId }) => {
       try {
-        return toolResult(appleNotes.getAttachments(noteId));
+        return toolResult(appleNotes.listAttachments(noteId));
       } catch (e) {
         if (e instanceof AppleNotesError) return toolError(e.message);
         throw e;
@@ -204,7 +204,7 @@ export function createServer(options?: AppleNotesOptions) {
       inputSchema: {
         name: z
           .string()
-          .describe("Attachment filename (from get_attachments results)."),
+          .describe("Attachment filename (from list_attachments results)."),
       },
     },
     async ({ name }) => {

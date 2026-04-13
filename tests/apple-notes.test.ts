@@ -275,19 +275,19 @@ describe("read with pagination", () => {
 });
 
 // ============================================================================
-// getAttachments()
+// listAttachments()
 // ============================================================================
 
-describe("getAttachments", () => {
+describe("listAttachments", () => {
   test("returns attachments for a note with attachments", () => {
     // Note 110 has an attachment
-    const attachments = db.getAttachments(110);
+    const attachments = db.listAttachments(110);
     expect(attachments.length).toBeGreaterThan(0);
     expect(attachments[0]?.contentType).toBe("public.jpeg");
   });
 
   test("resolves attachment URLs via ZMEDIA relationship", () => {
-    const attachments = db.getAttachments(110);
+    const attachments = db.listAttachments(110);
     expect(attachments.length).toBeGreaterThan(0);
     // URL should resolve through ZMEDIA to the media row's identifier
     expect(attachments[0]?.url).not.toBeNull();
@@ -297,7 +297,7 @@ describe("getAttachments", () => {
   });
 
   test("returns empty array for note without attachments", () => {
-    const attachments = db.getAttachments(100);
+    const attachments = db.listAttachments(100);
     expect(attachments).toHaveLength(0);
   });
 });

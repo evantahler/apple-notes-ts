@@ -89,8 +89,8 @@ export class AppleNotes {
     return this.reader.listNotes(options).map((r) => r.meta);
   }
 
-  getAttachments(noteId: number): AttachmentRef[] {
-    const refs = this.reader.getAttachments(noteId);
+  listAttachments(noteId: number): AttachmentRef[] {
+    const refs = this.reader.listAttachments(noteId);
     return refs.map((ref) => ({
       ...ref,
       url: this.getAttachmentUrl(ref.identifier || ref.name),

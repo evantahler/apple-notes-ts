@@ -259,7 +259,7 @@ function loadSelectedNote() {
     state.contentLines = renderMarkdown(content.markdown, contentPanelWidth());
 
     // Collect attachments from the DB query
-    state.attachments = db.getAttachments(note.id);
+    state.attachments = db.listAttachments(note.id);
 
     // Also extract attachment IDs from the markdown (protobuf embeds them as
     // ![attachment](attachment:UUID?type=UTI)) — the DB query may miss some

@@ -44,7 +44,7 @@ console.log(page.hasMore);       // true if more lines follow
 console.log(page.totalLines);    // total line count
 
 // Attachments
-const attachments = db.getAttachments(noteId);
+const attachments = db.listAttachments(noteId);
 const url = db.getAttachmentUrl("attachment-uuid"); // file:// URL or null
 
 // Cleanup
@@ -77,7 +77,7 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 - **list_notes** — List notes, optionally filtered by folder/account
 - **search_notes** — Search notes by title and content
 - **read_note** — Read a note as markdown (supports pagination)
-- **get_attachments** — List attachments for a note
+- **list_attachments** — List attachments for a note
 - **get_attachment_url** — Get the file URL for an attachment
 
 ## API

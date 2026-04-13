@@ -254,7 +254,7 @@ export class NoteReader {
     }
   }
 
-  getAttachments(noteId: number): AttachmentRef[] {
+  listAttachments(noteId: number): AttachmentRef[] {
     const rows = this.db
       .query(Q.GET_ATTACHMENTS)
       .all(noteId, this.entityTypes.attachment) as AttachmentRow[];
