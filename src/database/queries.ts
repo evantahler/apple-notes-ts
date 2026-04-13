@@ -36,6 +36,17 @@ export const LIST_FOLDERS = `
   ORDER BY f.ZTITLE2
 `;
 
+export const COUNT_NOTES_PER_FOLDER = `
+  SELECT
+    n.ZFOLDER as folderId,
+    COUNT(*) as count
+  FROM ZICCLOUDSYNCINGOBJECT n
+  WHERE n.ZTITLE1 IS NOT NULL
+    AND n.ZMARKEDFORDELETION != 1
+    AND n.Z_ENT = ?
+  GROUP BY n.ZFOLDER
+`;
+
 export const LIST_NOTES = `
   SELECT
     n.Z_PK as id,

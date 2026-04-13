@@ -13,6 +13,7 @@ export interface Folder {
   name: string;
   accountId: AccountId;
   accountName: string;
+  noteCount: number;
 }
 
 export interface NoteMeta {

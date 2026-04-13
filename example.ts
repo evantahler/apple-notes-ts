@@ -31,7 +31,7 @@ console.log();
 const folders = db.folders();
 console.log("Folders:");
 for (const f of folders) {
-  console.log(`  - ${f.name} (${f.accountName})`);
+  console.log(`  - ${f.name} (${f.noteCount} notes)`);
 }
 console.log();
 

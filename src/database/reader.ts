@@ -148,11 +148,17 @@ export class NoteReader {
       .query(Q.LIST_FOLDERS)
       .all(this.entityTypes.folder) as FolderRow[];
 
+    const countRows = this.db
+      .query(Q.COUNT_NOTES_PER_FOLDER)
+      .all(this.entityTypes.note) as { folderId: number; count: number }[];
+    const countMap = new Map(countRows.map((r) => [r.folderId, r.count]));
+
     let results = rows.map((r) => ({
       id: r.id,
       name: r.name ?? "",
       accountId: r.accountId ?? 0,
       accountName: this.accountCache.get(r.accountId ?? 0) ?? "",
+      noteCount: countMap.get(r.id) ?? 0,
     }));
 
     if (account) {
