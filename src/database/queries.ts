@@ -2,6 +2,11 @@
 // Offset from Unix epoch (1970-01-01) in seconds
 export const MAC_EPOCH_OFFSET = 978307200;
 
+export interface DateColumns {
+  createdAt: string;
+  modifiedAt: string;
+}
+
 export function macTimeToDate(macTime: number | null): Date {
   if (macTime == null) return new Date(0);
   return new Date((macTime + MAC_EPOCH_OFFSET) * 1000);
@@ -47,14 +52,14 @@ export const COUNT_NOTES_PER_FOLDER = `
   GROUP BY n.ZFOLDER
 `;
 
-export const LIST_NOTES = `
+export const listNotes = (dateCols: DateColumns) => `
   SELECT
     n.Z_PK as id,
     n.ZTITLE1 as title,
     n.ZSNIPPET as snippet,
     n.ZFOLDER as folderId,
-    n.ZCREATIONDATE1 as createdAt,
-    n.ZMODIFICATIONDATE1 as modifiedAt,
+    n.${dateCols.createdAt} as createdAt,
+    n.${dateCols.modifiedAt} as modifiedAt,
     n.ZISPASSWORDPROTECTED as isPasswordProtected,
     nd.ZDATA as zdata,
     nd.Z_PK as noteDataId
@@ -63,17 +68,17 @@ export const LIST_NOTES = `
   WHERE n.ZTITLE1 IS NOT NULL
     AND n.ZMARKEDFORDELETION != 1
     AND n.Z_ENT = ?
-  ORDER BY n.ZMODIFICATIONDATE1 DESC
+  ORDER BY n.${dateCols.modifiedAt} DESC
 `;
 
-export const GET_NOTE = `
+export const getNote = (dateCols: DateColumns) => `
   SELECT
     n.Z_PK as id,
     n.ZTITLE1 as title,
     n.ZSNIPPET as snippet,
     n.ZFOLDER as folderId,
-    n.ZCREATIONDATE1 as createdAt,
-    n.ZMODIFICATIONDATE1 as modifiedAt,
+    n.${dateCols.createdAt} as createdAt,
+    n.${dateCols.modifiedAt} as modifiedAt,
     n.ZISPASSWORDPROTECTED as isPasswordProtected,
     nd.ZDATA as zdata,
     nd.Z_PK as noteDataId
@@ -82,37 +87,37 @@ export const GET_NOTE = `
   WHERE n.Z_PK = ?
 `;
 
-export const SEARCH_BY_TITLE = `
+export const searchByTitle = (dateCols: DateColumns) => `
   SELECT
     n.Z_PK as id,
     n.ZTITLE1 as title,
     n.ZSNIPPET as snippet,
     n.ZFOLDER as folderId,
-    n.ZCREATIONDATE1 as createdAt,
-    n.ZMODIFICATIONDATE1 as modifiedAt,
+    n.${dateCols.createdAt} as createdAt,
+    n.${dateCols.modifiedAt} as modifiedAt,
     n.ZISPASSWORDPROTECTED as isPasswordProtected
   FROM ZICCLOUDSYNCINGOBJECT n
   WHERE n.ZTITLE1 LIKE ?
     AND n.ZMARKEDFORDELETION != 1
     AND n.Z_ENT = ?
-  ORDER BY n.ZMODIFICATIONDATE1 DESC
+  ORDER BY n.${dateCols.modifiedAt} DESC
   LIMIT ?
 `;
 
-export const SEARCH_BY_SNIPPET = `
+export const searchBySnippet = (dateCols: DateColumns) => `
   SELECT
     n.Z_PK as id,
     n.ZTITLE1 as title,
     n.ZSNIPPET as snippet,
     n.ZFOLDER as folderId,
-    n.ZCREATIONDATE1 as createdAt,
-    n.ZMODIFICATIONDATE1 as modifiedAt,
+    n.${dateCols.createdAt} as createdAt,
+    n.${dateCols.modifiedAt} as modifiedAt,
     n.ZISPASSWORDPROTECTED as isPasswordProtected
   FROM ZICCLOUDSYNCINGOBJECT n
   WHERE (n.ZTITLE1 LIKE ? OR n.ZSNIPPET LIKE ?)
     AND n.ZMARKEDFORDELETION != 1
     AND n.Z_ENT = ?
-  ORDER BY n.ZMODIFICATIONDATE1 DESC
+  ORDER BY n.${dateCols.modifiedAt} DESC
   LIMIT ?
 `;
 

@@ -7,6 +7,7 @@ import type {
   NoteMeta,
   SearchOptions,
 } from "../types.ts";
+import type { DateColumns } from "./queries.ts";
 import * as Q from "./queries.ts";
 
 interface EntityTypes {
@@ -14,6 +15,10 @@ interface EntityTypes {
   folder: number;
   note: number;
   attachment: number;
+}
+
+interface ColumnInfoRow {
+  name: string;
 }
 
 interface NoteRow {
@@ -55,6 +60,7 @@ interface EntityTypeRow {
 export class NoteReader {
   private db: Database;
   private entityTypes: EntityTypes;
+  private dateColumns: DateColumns;
   private folderCache: Map<number, { name: string; accountId: number }> =
     new Map();
   private accountCache: Map<number, string> = new Map();
@@ -62,6 +68,7 @@ export class NoteReader {
   constructor(db: Database) {
     this.db = db;
     this.entityTypes = this.discoverEntityTypes();
+    this.dateColumns = this.discoverDateColumns();
     this.buildCaches();
   }
 
@@ -92,6 +99,42 @@ export class NoteReader {
       note: types.note ?? 0,
       attachment: types.attachment ?? 0,
     };
+  }
+
+  private discoverDateColumns(): DateColumns {
+    const rows = this.db
+      .query("PRAGMA table_info(ZICCLOUDSYNCINGOBJECT)")
+      .all() as ColumnInfoRow[];
+    const columns = rows.map((r) => r.name);
+
+    // Core Data column suffixes vary by macOS version.
+    // Find all matching date columns, then pick the one with actual data.
+    const creationCols = columns.filter((c) => c.startsWith("ZCREATIONDATE"));
+    const modificationCols = columns.filter((c) =>
+      c.startsWith("ZMODIFICATIONDATE"),
+    );
+
+    return {
+      createdAt: this.pickDateColumn(creationCols) ?? "ZCREATIONDATE1",
+      modifiedAt: this.pickDateColumn(modificationCols) ?? "ZMODIFICATIONDATE1",
+    };
+  }
+
+  private pickDateColumn(candidates: string[]): string | null {
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0] ?? null;
+
+    // Multiple columns exist — pick the one that has non-NULL data
+    for (const col of candidates) {
+      const row = this.db
+        .query(
+          `SELECT ${col} as v FROM ZICCLOUDSYNCINGOBJECT WHERE ${col} IS NOT NULL LIMIT 1`,
+        )
+        .get() as { v: number } | null;
+      if (row) return col;
+    }
+
+    return candidates[0] ?? null;
   }
 
   private buildCaches(): void {
@@ -176,7 +219,7 @@ export class NoteReader {
     options?: ListNotesOptions,
   ): { meta: NoteMeta; zdata: Buffer | null }[] {
     const rows = this.db
-      .query(Q.LIST_NOTES)
+      .query(Q.listNotes(this.dateColumns))
       .all(this.entityTypes.note) as NoteRow[];
 
     let results = rows.map((r) => ({
@@ -204,7 +247,9 @@ export class NoteReader {
   }
 
   getNote(noteId: number): { meta: NoteMeta; zdata: Buffer | null } | null {
-    const row = this.db.query(Q.GET_NOTE).get(noteId) as NoteRow | null;
+    const row = this.db
+      .query(Q.getNote(this.dateColumns))
+      .get(noteId) as NoteRow | null;
     if (!row) return null;
     return {
       meta: this.rowToMeta(row),
@@ -217,7 +262,7 @@ export class NoteReader {
     const limit = options?.limit ?? 50;
 
     const rows = this.db
-      .query(Q.SEARCH_BY_SNIPPET)
+      .query(Q.searchBySnippet(this.dateColumns))
       .all(pattern, pattern, this.entityTypes.note, limit) as NoteRow[];
 
     let results = rows.map((r) => this.rowToMeta(r));
