@@ -124,13 +124,15 @@ export class NoteReader {
     if (candidates.length === 0) return null;
     if (candidates.length === 1) return candidates[0] ?? null;
 
-    // Multiple columns exist — pick the one that has non-NULL data
+    // Multiple columns exist — pick the one that has non-NULL data for notes.
+    // Different entity types use different date columns, so we must filter
+    // to note rows (Z_ENT) to find the right one.
     for (const col of candidates) {
       const row = this.db
         .query(
-          `SELECT ${col} as v FROM ZICCLOUDSYNCINGOBJECT WHERE ${col} IS NOT NULL LIMIT 1`,
+          `SELECT ${col} as v FROM ZICCLOUDSYNCINGOBJECT WHERE ${col} IS NOT NULL AND Z_ENT = ? LIMIT 1`,
         )
-        .get() as { v: number } | null;
+        .get(this.entityTypes.note) as { v: number } | null;
       if (row) return col;
     }
 
