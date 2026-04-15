@@ -11,7 +11,7 @@ let client: Client;
 let cleanup: () => void;
 
 beforeAll(async () => {
-  const { server, appleNotes } = createServer({
+  const { server, notes } = createServer({
     dbPath: FIXTURE_DB,
     containerPath: FIXTURE_DIR,
   });
@@ -25,7 +25,7 @@ beforeAll(async () => {
   await client.connect(clientTransport);
 
   cleanup = () => {
-    appleNotes.close();
+    notes.close();
   };
 });
 

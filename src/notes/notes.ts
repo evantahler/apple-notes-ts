@@ -21,17 +21,17 @@ import type {
   SearchOptions,
 } from "./types.ts";
 
-export interface AppleNotesOptions {
+export interface NotesOptions {
   dbPath?: string;
   containerPath?: string;
 }
 
-export class AppleNotes {
+export class Notes {
   private db: Database;
   private reader: NoteReader;
   private attachmentResolver: AttachmentResolver;
 
-  constructor(options?: AppleNotesOptions) {
+  constructor(options?: NotesOptions) {
     this.db = openDatabase(options?.dbPath);
     this.reader = new NoteReader(this.db);
     this.attachmentResolver = new AttachmentResolver(options?.containerPath);

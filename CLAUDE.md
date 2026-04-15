@@ -2,7 +2,7 @@
 
 ## Project
 
-apple-notes-ts — TypeScript package for reading and searching Apple Notes on macOS via direct SQLite access (no AppleScript).
+macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessage) via direct SQLite access (no AppleScript). Currently supports Apple Notes; Photos and iMessage support planned.
 
 ## Commands
 
@@ -16,8 +16,9 @@ apple-notes-ts — TypeScript package for reading and searching Apple Notes on m
 ## Architecture
 
 - **Runtime**: Bun (uses bun:sqlite, node:zlib built-ins)
-- **Access method**: Read-only SQLite against `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite`
+- **Access method**: Read-only SQLite against macOS databases
 - **No AppleScript/JXA** — all access is through the database
+- **Structure**: Each data source lives in its own `src/<source>/` directory (e.g. `src/notes/`)
 - **Note content**: Stored as gzip-compressed protobuf in `ZICNOTEDATA.ZDATA`, decoded via protobufjs
 - **Markdown conversion**: Custom converter walks protobuf AttributeRun entries to emit markdown
 - **Entity types**: Discovered at runtime from `Z_PRIMARYKEY` table (ICAccount, ICFolder, ICNote, ICAttachment)
@@ -25,17 +26,20 @@ apple-notes-ts — TypeScript package for reading and searching Apple Notes on m
 
 ## Key Files
 
-- `src/apple-notes.ts` — Main `AppleNotes` class (public API)
-- `src/types.ts` — TypeScript type definitions
-- `src/errors.ts` — Error classes (DatabaseNotFoundError, NoteNotFoundError, PasswordProtectedError)
-- `src/protobuf/notestore.proto` — Reverse-engineered protobuf schema
-- `src/protobuf/decode.ts` — Gzip decompress + protobuf decode
-- `src/conversion/proto-to-markdown.ts` — AttributeRun[] → markdown
-- `src/database/connection.ts` — SQLite database connection setup
-- `src/database/queries.ts` — SQL queries and Mac time conversion
-- `src/database/reader.ts` — SQLite query execution and row mapping
-- `src/attachments/resolver.ts` — Attachment file URL resolution
-- `src/mcp-server.ts` — Stdio MCP server wrapping AppleNotes API as 7 tools
+- `src/index.ts` — Package barrel export
+- `src/errors.ts` — Base `MacOSError` class and shared errors (DatabaseNotFoundError, DatabaseAccessDeniedError)
+- `src/mcp-server.ts` — Stdio MCP server wrapping all data source APIs as tools
+- `src/notes/notes.ts` — Main `Notes` class (public API for Apple Notes)
+- `src/notes/index.ts` — Notes barrel export
+- `src/notes/types.ts` — TypeScript type definitions for Notes
+- `src/notes/errors.ts` — Notes-specific errors (NoteNotFoundError, PasswordProtectedError)
+- `src/notes/protobuf/notestore.proto` — Reverse-engineered protobuf schema
+- `src/notes/protobuf/decode.ts` — Gzip decompress + protobuf decode
+- `src/notes/conversion/proto-to-markdown.ts` — AttributeRun[] → markdown
+- `src/notes/database/connection.ts` — SQLite database connection setup
+- `src/notes/database/queries.ts` — SQL queries and Mac time conversion
+- `src/notes/database/reader.ts` — SQLite query execution and row mapping
+- `src/notes/attachments/resolver.ts` — Attachment file URL resolution
 - `tests/fixtures/create-test-db.ts` — Generates the test NoteStore.sqlite
 
 ## Style Type Values (ParagraphStyle.style_type)

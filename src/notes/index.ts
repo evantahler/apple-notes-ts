@@ -1,8 +1,6 @@
-export {
-  DatabaseAccessDeniedError,
-  DatabaseNotFoundError,
-  MacOSError,
-} from "./errors.ts";
+export { NoteNotFoundError, PasswordProtectedError } from "./errors.ts";
+export type { NotesOptions } from "./notes.ts";
+export { Notes } from "./notes.ts";
 export type {
   Account,
   AccountId,
@@ -16,13 +14,7 @@ export type {
   NoteId,
   NoteMeta,
   NoteSortField,
-  NotesOptions,
   PaginationOptions,
   SearchOptions,
   SortOrder,
-} from "./notes/index.ts";
-export {
-  NoteNotFoundError,
-  Notes,
-  PasswordProtectedError,
-} from "./notes/index.ts";
+} from "./types.ts";

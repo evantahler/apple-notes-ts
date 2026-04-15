@@ -5,9 +5,12 @@ import protobuf from "protobufjs";
 import {
   decodeMergeableTable,
   decodeNoteData,
-} from "../src/protobuf/decode.ts";
+} from "../src/notes/protobuf/decode.ts";
 
-const PROTO_PATH = resolve(import.meta.dir, "../src/protobuf/notestore.proto");
+const PROTO_PATH = resolve(
+  import.meta.dir,
+  "../src/notes/protobuf/notestore.proto",
+);
 const root = protobuf.loadSync(PROTO_PATH);
 const NoteStoreProto = root.lookupType("NoteStoreProto");
 

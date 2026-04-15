@@ -1,15 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { NoteNotFoundError, PasswordProtectedError } from "../src/errors.ts";
-import { AppleNotes } from "../src/index.ts";
+import { Notes } from "../src/index.ts";
+import {
+  NoteNotFoundError,
+  PasswordProtectedError,
+} from "../src/notes/errors.ts";
 
 const FIXTURE_DB = resolve(import.meta.dir, "fixtures/NoteStore.sqlite");
 const FIXTURE_DIR = resolve(import.meta.dir, "fixtures");
 
-let db: AppleNotes;
+let db: Notes;
 
 beforeAll(() => {
-  db = new AppleNotes({ dbPath: FIXTURE_DB, containerPath: FIXTURE_DIR });
+  db = new Notes({ dbPath: FIXTURE_DB, containerPath: FIXTURE_DIR });
 });
 
 afterAll(() => {
@@ -447,7 +450,7 @@ describe("getAttachmentUrl", () => {
 
 describe("close", () => {
   test("does not throw", () => {
-    const tempDb = new AppleNotes({
+    const tempDb = new Notes({
       dbPath: FIXTURE_DB,
       containerPath: FIXTURE_DIR,
     });

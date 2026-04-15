@@ -2,7 +2,10 @@ import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { DatabaseAccessDeniedError, DatabaseNotFoundError } from "../errors.ts";
+import {
+  DatabaseAccessDeniedError,
+  DatabaseNotFoundError,
+} from "../../errors.ts";
 
 const DEFAULT_DB_PATH = join(
   homedir(),

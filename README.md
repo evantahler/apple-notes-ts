@@ -1,25 +1,27 @@
-# apple-notes-ts
+# macos-ts
 
-TypeScript package for reading and searching Apple Notes on macOS. Parses the NoteStore.sqlite database directly — no AppleScript, no network calls. Note content is returned as markdown.
+TypeScript package for accessing macOS data via direct SQLite access — no AppleScript, no network calls. Currently supports **Apple Notes** with Photos and iMessage coming soon.
 
 ## Requirements
 
-- **macOS** (Apple Notes stores data locally)
+- **macOS** (reads local macOS databases)
 - **Bun** runtime
-- **Full Disk Access** for the process reading notes (System Settings → Privacy & Security → Full Disk Access)
+- **Full Disk Access** for the process reading data (System Settings → Privacy & Security → Full Disk Access)
 
 ## Install
 
 ```bash
-bun add apple-notes-ts
+bun add macos-ts
 ```
 
 ## Usage
 
-```typescript
-import { AppleNotes } from "apple-notes-ts";
+### Notes
 
-const db = new AppleNotes();
+```typescript
+import { Notes } from "macos-ts";
+
+const db = new Notes();
 
 // List accounts and folders
 const accounts = db.accounts();
@@ -54,7 +56,7 @@ db.close();
 
 ## MCP Server
 
-apple-notes-ts includes a stdio MCP server so AI agents can interact with your notes.
+macos-ts includes a stdio MCP server so AI agents can interact with your macOS data.
 
 ### Configure
 
@@ -63,9 +65,9 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 ```json
 {
   "mcpServers": {
-    "apple-notes": {
+    "macos": {
       "command": "bunx",
-      "args": ["apple-notes-ts"]
+      "args": ["macos-ts"]
     }
   }
 }
@@ -83,7 +85,7 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 
 ## API
 
-Pass `dbPath` or `containerPath` to `new AppleNotes()` to override auto-detection. Note content is returned as markdown — see [docs/markdown-conversion.md](docs/markdown-conversion.md) for the full formatting map.
+Pass `dbPath` or `containerPath` to `new Notes()` to override auto-detection. Note content is returned as markdown — see [docs/markdown-conversion.md](docs/markdown-conversion.md) for the full formatting map.
 
 Errors: `DatabaseNotFoundError` (missing DB or no Full Disk Access), `NoteNotFoundError`, `PasswordProtectedError` (locked notes can't be decrypted).
 
@@ -101,7 +103,7 @@ Tests run against a checked-in fixture database — no Full Disk Access needed.
 
 ## Limitations
 
-- **Read-only** — writing to the SQLite database directly risks iCloud sync corruption
+- **Read-only** — writing to SQLite databases directly risks iCloud sync corruption
 - **Password-protected notes** — cannot be decrypted; throws `PasswordProtectedError`
 
 ## License

@@ -1,6 +1,6 @@
 # Markdown Conversion
 
-apple-notes-ts converts Apple Notes content from its internal protobuf format into standard markdown. This document describes the conversion mapping and how the underlying data is accessed.
+macos-ts converts Apple Notes content from its internal protobuf format into standard markdown. This document describes the conversion mapping and how the underlying data is accessed.
 
 ## Formatting Map
 

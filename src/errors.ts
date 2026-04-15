@@ -1,32 +1,18 @@
-export class AppleNotesError extends Error {
+export class MacOSError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
-    this.name = "AppleNotesError";
+    this.name = "MacOSError";
   }
 }
 
-export class NoteNotFoundError extends AppleNotesError {
-  constructor(noteId: number) {
-    super(`Note not found: ${noteId}`);
-    this.name = "NoteNotFoundError";
-  }
-}
-
-export class PasswordProtectedError extends AppleNotesError {
-  constructor(noteId: number) {
-    super(`Note is password protected and cannot be read: ${noteId}`);
-    this.name = "PasswordProtectedError";
-  }
-}
-
-export class DatabaseNotFoundError extends AppleNotesError {
+export class DatabaseNotFoundError extends MacOSError {
   constructor(path: string) {
     super(`NoteStore database not found or inaccessible: ${path}`);
     this.name = "DatabaseNotFoundError";
   }
 }
 
-export class DatabaseAccessDeniedError extends AppleNotesError {
+export class DatabaseAccessDeniedError extends MacOSError {
   constructor(path: string) {
     const app = detectTerminalApp();
     const appHint = app ? ` to "${app}"` : " to your terminal app";

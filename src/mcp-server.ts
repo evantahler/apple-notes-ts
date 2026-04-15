@@ -3,8 +3,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { AppleNotes, type AppleNotesOptions } from "./apple-notes.ts";
-import { AppleNotesError } from "./errors.ts";
+import { MacOSError } from "./errors.ts";
+import { Notes, type NotesOptions } from "./notes/index.ts";
 
 function toolResult(data: unknown) {
   return {
@@ -19,12 +19,12 @@ function toolError(message: string) {
   };
 }
 
-export function createServer(options?: AppleNotesOptions) {
-  const appleNotes = new AppleNotes(options);
+export function createServer(options?: NotesOptions) {
+  const notes = new Notes(options);
 
   const server = new McpServer({
-    name: "apple-notes",
-    version: "0.2.0",
+    name: "macos",
+    version: "0.5.0",
   });
 
   server.registerTool(
@@ -35,9 +35,9 @@ export function createServer(options?: AppleNotesOptions) {
     },
     async () => {
       try {
-        return toolResult(appleNotes.accounts());
+        return toolResult(notes.accounts());
       } catch (e) {
-        if (e instanceof AppleNotesError) return toolError(e.message);
+        if (e instanceof MacOSError) return toolError(e.message);
         throw e;
       }
     },
@@ -59,9 +59,9 @@ export function createServer(options?: AppleNotesOptions) {
     },
     async ({ account }) => {
       try {
-        return toolResult(appleNotes.folders(account));
+        return toolResult(notes.folders(account));
       } catch (e) {
-        if (e instanceof AppleNotesError) return toolError(e.message);
+        if (e instanceof MacOSError) return toolError(e.message);
         throw e;
       }
     },
@@ -113,10 +113,10 @@ export function createServer(options?: AppleNotesOptions) {
     async ({ folder, account, search, sortBy, order, limit }) => {
       try {
         return toolResult(
-          appleNotes.notes({ folder, account, search, sortBy, order, limit }),
+          notes.notes({ folder, account, search, sortBy, order, limit }),
         );
       } catch (e) {
-        if (e instanceof AppleNotesError) return toolError(e.message);
+        if (e instanceof MacOSError) return toolError(e.message);
         throw e;
       }
     },
@@ -148,9 +148,9 @@ export function createServer(options?: AppleNotesOptions) {
     },
     async ({ query, folder, limit }) => {
       try {
-        return toolResult(appleNotes.search(query, { folder, limit }));
+        return toolResult(notes.search(query, { folder, limit }));
       } catch (e) {
-        if (e instanceof AppleNotesError) return toolError(e.message);
+        if (e instanceof MacOSError) return toolError(e.message);
         throw e;
       }
     },
@@ -189,11 +189,11 @@ export function createServer(options?: AppleNotesOptions) {
     async ({ noteId, offset, limit }) => {
       try {
         if (offset !== undefined || limit !== undefined) {
-          return toolResult(appleNotes.read(noteId, { offset, limit }));
+          return toolResult(notes.read(noteId, { offset, limit }));
         }
-        return toolResult(appleNotes.read(noteId));
+        return toolResult(notes.read(noteId));
       } catch (e) {
-        if (e instanceof AppleNotesError) return toolError(e.message);
+        if (e instanceof MacOSError) return toolError(e.message);
         throw e;
       }
     },
@@ -213,9 +213,9 @@ export function createServer(options?: AppleNotesOptions) {
     },
     async ({ noteId }) => {
       try {
-        return toolResult(appleNotes.listAttachments(noteId));
+        return toolResult(notes.listAttachments(noteId));
       } catch (e) {
-        if (e instanceof AppleNotesError) return toolError(e.message);
+        if (e instanceof MacOSError) return toolError(e.message);
         throw e;
       }
     },
@@ -234,23 +234,23 @@ export function createServer(options?: AppleNotesOptions) {
     },
     async ({ name }) => {
       try {
-        return toolResult({ url: appleNotes.getAttachmentUrl(name) });
+        return toolResult({ url: notes.getAttachmentUrl(name) });
       } catch (e) {
-        if (e instanceof AppleNotesError) return toolError(e.message);
+        if (e instanceof MacOSError) return toolError(e.message);
         throw e;
       }
     },
   );
 
-  return { server, appleNotes };
+  return { server, notes };
 }
 
 if (import.meta.main) {
-  const { server, appleNotes } = createServer();
+  const { server, notes } = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
   process.on("beforeExit", () => {
-    appleNotes.close();
+    notes.close();
   });
 }

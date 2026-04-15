@@ -7,8 +7,8 @@
 
 import type { AttachmentRef, Folder, NoteMeta } from "./src/index.ts";
 import {
-  AppleNotes,
   DatabaseAccessDeniedError,
+  Notes,
   PasswordProtectedError,
 } from "./src/index.ts";
 
@@ -109,7 +109,7 @@ interface TreeItem {
   indent: number;
 }
 
-function buildFolderTree(db: AppleNotes): TreeItem[] {
+function buildFolderTree(db: Notes): TreeItem[] {
   const items: TreeItem[] = [];
   const folders = db.folders();
   const allNotes = db.notes();
@@ -174,7 +174,7 @@ interface State {
   statusMessage: string;
 }
 
-let db: AppleNotes;
+let db: Notes;
 const state: State = {
   focus: "folders",
   tree: [],
@@ -633,7 +633,7 @@ function handleInput(data: Buffer) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 try {
-  db = new AppleNotes();
+  db = new Notes();
 } catch (error) {
   if (error instanceof DatabaseAccessDeniedError) {
     console.error(error.message);

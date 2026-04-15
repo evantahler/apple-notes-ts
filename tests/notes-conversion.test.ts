@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { noteToMarkdown } from "../src/conversion/proto-to-markdown.ts";
+import { noteToMarkdown } from "../src/notes/conversion/proto-to-markdown.ts";
 import type {
   DecodedAttributeRun,
   DecodedNote,
   DecodedTable,
-} from "../src/protobuf/decode.ts";
+} from "../src/notes/protobuf/decode.ts";
 
 function note(text: string, runs: DecodedAttributeRun[]): DecodedNote {
   return { text, attributeRuns: runs };
