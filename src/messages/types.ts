@@ -45,7 +45,10 @@ export interface MessageAttachment {
 }
 
 export type ChatSortField = "lastMessageDate" | "displayName";
-export type SortOrder = "asc" | "desc";
+
+import type { SortOrder } from "../types.ts";
+
+export type { SortOrder };
 
 export interface ListChatsOptions {
   search?: string;

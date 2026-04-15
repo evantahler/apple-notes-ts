@@ -52,7 +52,10 @@ export interface AttachmentRef {
 }
 
 export type NoteSortField = "title" | "createdAt" | "modifiedAt";
-export type SortOrder = "asc" | "desc";
+
+import type { SortOrder } from "../types.ts";
+
+export type { SortOrder };
 
 export interface SearchOptions {
   folder?: string;

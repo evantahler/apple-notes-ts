@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { openFullDiskAccessSettings } from "../errors.ts";
 import { openDatabase } from "./database/connection.ts";
 import { MessageReader } from "./database/reader.ts";
 import { ChatNotFoundError, MessageNotFoundError } from "./errors.ts";
@@ -64,9 +65,6 @@ export class Messages {
   }
 
   static requestAccess(): void {
-    Bun.spawn([
-      "open",
-      "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
-    ]);
+    openFullDiskAccessSettings();
   }
 }

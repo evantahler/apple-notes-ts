@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { openFullDiskAccessSettings } from "../errors.ts";
 import { AttachmentResolver } from "./attachments/resolver.ts";
 import { noteToMarkdown } from "./conversion/proto-to-markdown.ts";
 import { openDatabase } from "./database/connection.ts";
@@ -142,9 +143,6 @@ export class Notes {
   }
 
   static requestAccess(): void {
-    Bun.spawn([
-      "open",
-      "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
-    ]);
+    openFullDiskAccessSettings();
   }
 }

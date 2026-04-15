@@ -38,10 +38,10 @@ export type {
   NotesOptions,
   PaginationOptions,
   SearchOptions,
-  SortOrder,
 } from "./notes/index.ts";
 export {
   NoteNotFoundError,
   Notes,
   PasswordProtectedError,
 } from "./notes/index.ts";
+export type { SortOrder } from "./types.ts";

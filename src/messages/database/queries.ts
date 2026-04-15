@@ -1,16 +1,29 @@
-// Mac Absolute Time epoch: 2001-01-01 00:00:00 UTC
-// Offset from Unix epoch (1970-01-01) in seconds
-const MAC_EPOCH_OFFSET = 978307200;
+export { dateToMacNanos, macNanosToDate } from "../../database/timestamps.ts";
 
-// Messages timestamps are in nanoseconds since 2001-01-01
-export function macNanosToDate(nanos: number | null): Date {
-  if (nanos == null || nanos === 0) return new Date(0);
-  return new Date((nanos / 1e9 + MAC_EPOCH_OFFSET) * 1000);
-}
+const MESSAGE_COLUMNS = `
+    m.ROWID as id,
+    m.guid,
+    cmj.chat_id as chatId,
+    m.text,
+    m.attributedBody,
+    m.is_from_me as isFromMe,
+    m.handle_id as handleId,
+    m.date,
+    m.date_read as dateRead,
+    m.service,
+    m.is_audio_message as isAudioMessage,
+    m.cache_has_attachments as hasAttachments,
+    m.thread_originator_guid as threadOriginatorGuid,
+    m.reply_to_guid as replyToGuid`;
 
-export function dateToMacNanos(date: Date): number {
-  return (date.getTime() / 1000 - MAC_EPOCH_OFFSET) * 1e9;
-}
+const CHAT_COLUMNS = `
+    c.ROWID as id,
+    c.guid,
+    c.display_name as displayName,
+    c.chat_identifier as chatIdentifier,
+    c.style,
+    c.service_name as serviceName,
+    MAX(cmj.message_date) as lastMessageDate`;
 
 export const LIST_HANDLES = `
   SELECT
@@ -22,14 +35,7 @@ export const LIST_HANDLES = `
 `;
 
 export const LIST_CHATS = `
-  SELECT
-    c.ROWID as id,
-    c.guid,
-    c.display_name as displayName,
-    c.chat_identifier as chatIdentifier,
-    c.style,
-    c.service_name as serviceName,
-    MAX(cmj.message_date) as lastMessageDate
+  SELECT ${CHAT_COLUMNS}
   FROM chat c
   LEFT JOIN chat_message_join cmj ON cmj.chat_id = c.ROWID
   GROUP BY c.ROWID
@@ -37,14 +43,7 @@ export const LIST_CHATS = `
 `;
 
 export const GET_CHAT = `
-  SELECT
-    c.ROWID as id,
-    c.guid,
-    c.display_name as displayName,
-    c.chat_identifier as chatIdentifier,
-    c.style,
-    c.service_name as serviceName,
-    MAX(cmj.message_date) as lastMessageDate
+  SELECT ${CHAT_COLUMNS}
   FROM chat c
   LEFT JOIN chat_message_join cmj ON cmj.chat_id = c.ROWID
   WHERE c.ROWID = ?
@@ -59,21 +58,7 @@ export const LIST_CHAT_PARTICIPANTS = `
 `;
 
 export const LIST_MESSAGES = `
-  SELECT
-    m.ROWID as id,
-    m.guid,
-    cmj.chat_id as chatId,
-    m.text,
-    m.attributedBody,
-    m.is_from_me as isFromMe,
-    m.handle_id as handleId,
-    m.date,
-    m.date_read as dateRead,
-    m.service,
-    m.is_audio_message as isAudioMessage,
-    m.cache_has_attachments as hasAttachments,
-    m.thread_originator_guid as threadOriginatorGuid,
-    m.reply_to_guid as replyToGuid
+  SELECT ${MESSAGE_COLUMNS}
   FROM message m
   JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
   WHERE cmj.chat_id = ?
@@ -81,42 +66,14 @@ export const LIST_MESSAGES = `
 `;
 
 export const GET_MESSAGE = `
-  SELECT
-    m.ROWID as id,
-    m.guid,
-    cmj.chat_id as chatId,
-    m.text,
-    m.attributedBody,
-    m.is_from_me as isFromMe,
-    m.handle_id as handleId,
-    m.date,
-    m.date_read as dateRead,
-    m.service,
-    m.is_audio_message as isAudioMessage,
-    m.cache_has_attachments as hasAttachments,
-    m.thread_originator_guid as threadOriginatorGuid,
-    m.reply_to_guid as replyToGuid
+  SELECT ${MESSAGE_COLUMNS}
   FROM message m
   LEFT JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
   WHERE m.ROWID = ?
 `;
 
 export const SEARCH_MESSAGES = `
-  SELECT
-    m.ROWID as id,
-    m.guid,
-    cmj.chat_id as chatId,
-    m.text,
-    m.attributedBody,
-    m.is_from_me as isFromMe,
-    m.handle_id as handleId,
-    m.date,
-    m.date_read as dateRead,
-    m.service,
-    m.is_audio_message as isAudioMessage,
-    m.cache_has_attachments as hasAttachments,
-    m.thread_originator_guid as threadOriginatorGuid,
-    m.reply_to_guid as replyToGuid
+  SELECT ${MESSAGE_COLUMNS}
   FROM message m
   LEFT JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
   WHERE m.text LIKE ?
@@ -125,21 +82,7 @@ export const SEARCH_MESSAGES = `
 `;
 
 export const SEARCH_MESSAGES_IN_CHAT = `
-  SELECT
-    m.ROWID as id,
-    m.guid,
-    cmj.chat_id as chatId,
-    m.text,
-    m.attributedBody,
-    m.is_from_me as isFromMe,
-    m.handle_id as handleId,
-    m.date,
-    m.date_read as dateRead,
-    m.service,
-    m.is_audio_message as isAudioMessage,
-    m.cache_has_attachments as hasAttachments,
-    m.thread_originator_guid as threadOriginatorGuid,
-    m.reply_to_guid as replyToGuid
+  SELECT ${MESSAGE_COLUMNS}
   FROM message m
   JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
   WHERE m.text LIKE ?

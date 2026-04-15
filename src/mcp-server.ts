@@ -20,6 +20,15 @@ function toolError(message: string) {
   };
 }
 
+function wrapTool<T>(fn: () => T) {
+  try {
+    return toolResult(fn());
+  } catch (e) {
+    if (e instanceof MacOSError) return toolError(e.message);
+    throw e;
+  }
+}
+
 export interface ServerOptions {
   notes?: NotesOptions;
   messages?: MessagesOptions;
@@ -44,14 +53,7 @@ export function createServer(options?: ServerOptions) {
       description:
         "List all Apple Notes accounts configured on this Mac (e.g. iCloud, On My Mac). Returns each account's numeric ID and display name.",
     },
-    async () => {
-      try {
-        return toolResult(notes.accounts());
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async () => wrapTool(() => notes.accounts()),
   );
 
   server.registerTool(
@@ -68,14 +70,7 @@ export function createServer(options?: ServerOptions) {
           ),
       },
     },
-    async ({ account }) => {
-      try {
-        return toolResult(notes.folders(account));
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async ({ account }) => wrapTool(() => notes.folders(account)),
   );
 
   server.registerTool(
@@ -121,16 +116,10 @@ export function createServer(options?: ServerOptions) {
           .describe("Maximum number of notes to return."),
       },
     },
-    async ({ folder, account, search, sortBy, order, limit }) => {
-      try {
-        return toolResult(
-          notes.notes({ folder, account, search, sortBy, order, limit }),
-        );
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async ({ folder, account, search, sortBy, order, limit }) =>
+      wrapTool(() =>
+        notes.notes({ folder, account, search, sortBy, order, limit }),
+      ),
   );
 
   server.registerTool(
@@ -157,14 +146,8 @@ export function createServer(options?: ServerOptions) {
           .describe("Maximum number of results to return. Defaults to 50."),
       },
     },
-    async ({ query, folder, limit }) => {
-      try {
-        return toolResult(notes.search(query, { folder, limit }));
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async ({ query, folder, limit }) =>
+      wrapTool(() => notes.search(query, { folder, limit })),
   );
 
   server.registerTool(
@@ -197,17 +180,13 @@ export function createServer(options?: ServerOptions) {
           ),
       },
     },
-    async ({ noteId, offset, limit }) => {
-      try {
+    async ({ noteId, offset, limit }) =>
+      wrapTool(() => {
         if (offset !== undefined || limit !== undefined) {
-          return toolResult(notes.read(noteId, { offset, limit }));
+          return notes.read(noteId, { offset, limit });
         }
-        return toolResult(notes.read(noteId));
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+        return notes.read(noteId);
+      }),
   );
 
   server.registerTool(
@@ -222,14 +201,7 @@ export function createServer(options?: ServerOptions) {
           .describe("Numeric note ID to get attachments for."),
       },
     },
-    async ({ noteId }) => {
-      try {
-        return toolResult(notes.listAttachments(noteId));
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async ({ noteId }) => wrapTool(() => notes.listAttachments(noteId)),
   );
 
   server.registerTool(
@@ -243,14 +215,7 @@ export function createServer(options?: ServerOptions) {
           .describe("Attachment filename (from list_attachments results)."),
       },
     },
-    async ({ name }) => {
-      try {
-        return toolResult({ url: notes.getAttachmentUrl(name) });
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async ({ name }) => wrapTool(() => ({ url: notes.getAttachmentUrl(name) })),
   );
 
   // ==========================================================================
@@ -286,14 +251,8 @@ export function createServer(options?: ServerOptions) {
           .describe("Maximum number of chats to return."),
       },
     },
-    async ({ search, sortBy, order, limit }) => {
-      try {
-        return toolResult(messages.chats({ search, sortBy, order, limit }));
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async ({ search, sortBy, order, limit }) =>
+      wrapTool(() => messages.chats({ search, sortBy, order, limit })),
   );
 
   server.registerTool(
@@ -308,14 +267,7 @@ export function createServer(options?: ServerOptions) {
           .describe("Numeric chat ID (from list_chats results)."),
       },
     },
-    async ({ chatId }) => {
-      try {
-        return toolResult(messages.getChat(chatId));
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async ({ chatId }) => wrapTool(() => messages.getChat(chatId)),
   );
 
   server.registerTool(
@@ -361,22 +313,16 @@ export function createServer(options?: ServerOptions) {
           .describe("Sort direction. Defaults to 'desc' (newest first)."),
       },
     },
-    async ({ chatId, limit, beforeDate, afterDate, fromMe, order }) => {
-      try {
-        return toolResult(
-          messages.messages(chatId, {
-            limit,
-            beforeDate: beforeDate ? new Date(beforeDate) : undefined,
-            afterDate: afterDate ? new Date(afterDate) : undefined,
-            fromMe,
-            order,
-          }),
-        );
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async ({ chatId, limit, beforeDate, afterDate, fromMe, order }) =>
+      wrapTool(() =>
+        messages.messages(chatId, {
+          limit,
+          beforeDate: beforeDate ? new Date(beforeDate) : undefined,
+          afterDate: afterDate ? new Date(afterDate) : undefined,
+          fromMe,
+          order,
+        }),
+      ),
   );
 
   server.registerTool(
@@ -393,14 +339,7 @@ export function createServer(options?: ServerOptions) {
           ),
       },
     },
-    async ({ messageId }) => {
-      try {
-        return toolResult(messages.getMessage(messageId));
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async ({ messageId }) => wrapTool(() => messages.getMessage(messageId)),
   );
 
   server.registerTool(
@@ -424,14 +363,8 @@ export function createServer(options?: ServerOptions) {
           .describe("Maximum number of results to return. Defaults to 50."),
       },
     },
-    async ({ query, chatId, limit }) => {
-      try {
-        return toolResult(messages.search(query, { chatId, limit }));
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async ({ query, chatId, limit }) =>
+      wrapTool(() => messages.search(query, { chatId, limit })),
   );
 
   server.registerTool(
@@ -446,14 +379,7 @@ export function createServer(options?: ServerOptions) {
           .describe("Numeric message ID to get attachments for."),
       },
     },
-    async ({ messageId }) => {
-      try {
-        return toolResult(messages.attachments(messageId));
-      } catch (e) {
-        if (e instanceof MacOSError) return toolError(e.message);
-        throw e;
-      }
-    },
+    async ({ messageId }) => wrapTool(() => messages.attachments(messageId)),
   );
 
   return { server, notes, messages };

@@ -6,30 +6,17 @@
  */
 
 import { Database } from "bun:sqlite";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
+import {
+  FIXTURE_DIR,
+  cleanupDatabase,
+  dateToMacNanos as toMacNanos,
+} from "./helpers.ts";
 
-const FIXTURE_DIR = dirname(new URL(import.meta.url).pathname);
 const DB_PATH = resolve(FIXTURE_DIR, "chat.db");
 
-// Mac Absolute Time: nanoseconds since 2001-01-01 for Messages
-const MAC_EPOCH_OFFSET = 978307200;
-function toMacNanos(date: Date): number {
-  return (date.getTime() / 1000 - MAC_EPOCH_OFFSET) * 1e9;
-}
-
 // Delete existing DB
-try {
-  const { unlinkSync } = await import("node:fs");
-  try {
-    unlinkSync(DB_PATH);
-  } catch {}
-  try {
-    unlinkSync(`${DB_PATH}-wal`);
-  } catch {}
-  try {
-    unlinkSync(`${DB_PATH}-shm`);
-  } catch {}
-} catch {}
+cleanupDatabase(DB_PATH);
 
 const db = new Database(DB_PATH);
 

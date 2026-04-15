@@ -24,11 +24,15 @@ export class DatabaseAccessDeniedError extends MacOSError {
   }
 
   openSettings(): void {
-    Bun.spawn([
-      "open",
-      "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
-    ]);
+    openFullDiskAccessSettings();
   }
+}
+
+export function openFullDiskAccessSettings(): void {
+  Bun.spawn([
+    "open",
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+  ]);
 }
 
 function detectTerminalApp(): string | null {

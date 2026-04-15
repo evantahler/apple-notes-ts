@@ -7,19 +7,17 @@
 
 import { Database } from "bun:sqlite";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import protobuf from "protobufjs";
+import {
+  FIXTURE_DIR,
+  cleanupDatabase,
+  dateToMacTime as toMacTime,
+} from "./helpers.ts";
 
-const FIXTURE_DIR = dirname(new URL(import.meta.url).pathname);
 const DB_PATH = resolve(FIXTURE_DIR, "NoteStore.sqlite");
-const PROTO_PATH = resolve(FIXTURE_DIR, "../../src/protobuf/notestore.proto");
-
-// Mac Absolute Time: seconds since 2001-01-01
-const MAC_EPOCH_OFFSET = 978307200;
-function toMacTime(date: Date): number {
-  return date.getTime() / 1000 - MAC_EPOCH_OFFSET;
-}
+const PROTO_PATH = resolve(FIXTURE_DIR, "../../src/notes/protobuf/notestore.proto");
 
 // Entity type IDs (Z_ENT values in Z_PRIMARYKEY)
 const ENT_ACCOUNT = 1;
@@ -192,19 +190,7 @@ function attachmentRun(
 // ============================================================================
 
 // Delete existing DB
-try {
-  Bun.file(DB_PATH).delete;
-  const { unlinkSync } = await import("node:fs");
-  try {
-    unlinkSync(DB_PATH);
-  } catch {}
-  try {
-    unlinkSync(`${DB_PATH}-wal`);
-  } catch {}
-  try {
-    unlinkSync(`${DB_PATH}-shm`);
-  } catch {}
-} catch {}
+cleanupDatabase(DB_PATH);
 
 const db = new Database(DB_PATH);
 
