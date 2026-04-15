@@ -1,6 +1,6 @@
 {
   "name": "macos-ts",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "TypeScript package for accessing macOS data (Notes, Photos, iMessage) via direct SQLite access. Includes markdown conversion, attachment support, and a local MCP server.",
   "module": "src/index.ts",
   "bin": {

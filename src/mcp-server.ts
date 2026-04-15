@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { MacOSError } from "./errors.ts";
+import { Messages, type MessagesOptions } from "./messages/index.ts";
 import { Notes, type NotesOptions } from "./notes/index.ts";
 
 function toolResult(data: unknown) {
@@ -19,13 +20,23 @@ function toolError(message: string) {
   };
 }
 
-export function createServer(options?: NotesOptions) {
-  const notes = new Notes(options);
+export interface ServerOptions {
+  notes?: NotesOptions;
+  messages?: MessagesOptions;
+}
+
+export function createServer(options?: ServerOptions) {
+  const notes = new Notes(options?.notes);
+  const messages = new Messages(options?.messages);
 
   const server = new McpServer({
     name: "macos",
-    version: "0.5.0",
+    version: "0.6.0",
   });
+
+  // ==========================================================================
+  // Notes tools
+  // ==========================================================================
 
   server.registerTool(
     "list_accounts",
@@ -242,15 +253,219 @@ export function createServer(options?: NotesOptions) {
     },
   );
 
-  return { server, notes };
+  // ==========================================================================
+  // Messages tools
+  // ==========================================================================
+
+  server.registerTool(
+    "list_chats",
+    {
+      description:
+        "List iMessage/SMS conversations. Returns each chat's display name, participants, service type, and last message date. Optionally search by name or phone number.",
+      inputSchema: {
+        search: z
+          .string()
+          .optional()
+          .describe(
+            "Text to filter chats by, matched against display name, chat identifier, and participant handles.",
+          ),
+        sortBy: z
+          .enum(["lastMessageDate", "displayName"])
+          .optional()
+          .describe("Field to sort results by. Defaults to 'lastMessageDate'."),
+        order: z
+          .enum(["asc", "desc"])
+          .optional()
+          .describe("Sort direction. Defaults to 'desc' (newest first)."),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .optional()
+          .describe("Maximum number of chats to return."),
+      },
+    },
+    async ({ search, sortBy, order, limit }) => {
+      try {
+        return toolResult(messages.chats({ search, sortBy, order, limit }));
+      } catch (e) {
+        if (e instanceof MacOSError) return toolError(e.message);
+        throw e;
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_chat",
+    {
+      description:
+        "Get details for a specific iMessage/SMS conversation by its numeric ID, including all participants.",
+      inputSchema: {
+        chatId: z
+          .number()
+          .int()
+          .describe("Numeric chat ID (from list_chats results)."),
+      },
+    },
+    async ({ chatId }) => {
+      try {
+        return toolResult(messages.getChat(chatId));
+      } catch (e) {
+        if (e instanceof MacOSError) return toolError(e.message);
+        throw e;
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_messages",
+    {
+      description:
+        "List messages in a specific iMessage/SMS conversation. Supports date filtering and limiting. Returns message text, sender, date, and metadata.",
+      inputSchema: {
+        chatId: z
+          .number()
+          .int()
+          .describe("Numeric chat ID to get messages for."),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .optional()
+          .describe(
+            "Maximum number of messages to return. Defaults to all messages.",
+          ),
+        beforeDate: z
+          .string()
+          .optional()
+          .describe(
+            "ISO 8601 date string. Only return messages before this date.",
+          ),
+        afterDate: z
+          .string()
+          .optional()
+          .describe(
+            "ISO 8601 date string. Only return messages after this date.",
+          ),
+        fromMe: z
+          .boolean()
+          .optional()
+          .describe(
+            "Filter to only sent (true) or only received (false) messages.",
+          ),
+        order: z
+          .enum(["asc", "desc"])
+          .optional()
+          .describe("Sort direction. Defaults to 'desc' (newest first)."),
+      },
+    },
+    async ({ chatId, limit, beforeDate, afterDate, fromMe, order }) => {
+      try {
+        return toolResult(
+          messages.messages(chatId, {
+            limit,
+            beforeDate: beforeDate ? new Date(beforeDate) : undefined,
+            afterDate: afterDate ? new Date(afterDate) : undefined,
+            fromMe,
+            order,
+          }),
+        );
+      } catch (e) {
+        if (e instanceof MacOSError) return toolError(e.message);
+        throw e;
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_message",
+    {
+      description:
+        "Get a single iMessage/SMS message by its numeric ID. Returns the full message text, sender, date, and metadata.",
+      inputSchema: {
+        messageId: z
+          .number()
+          .int()
+          .describe(
+            "Numeric message ID (from list_messages or search_messages results).",
+          ),
+      },
+    },
+    async ({ messageId }) => {
+      try {
+        return toolResult(messages.getMessage(messageId));
+      } catch (e) {
+        if (e instanceof MacOSError) return toolError(e.message);
+        throw e;
+      }
+    },
+  );
+
+  server.registerTool(
+    "search_messages",
+    {
+      description:
+        "Search iMessage/SMS message text across all conversations or within a specific chat. Returns matching messages with sender, date, and chat context.",
+      inputSchema: {
+        query: z.string().describe("Text to search for in message content."),
+        chatId: z
+          .number()
+          .int()
+          .optional()
+          .describe("Numeric chat ID to restrict the search to."),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("Maximum number of results to return. Defaults to 50."),
+      },
+    },
+    async ({ query, chatId, limit }) => {
+      try {
+        return toolResult(messages.search(query, { chatId, limit }));
+      } catch (e) {
+        if (e instanceof MacOSError) return toolError(e.message);
+        throw e;
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_message_attachments",
+    {
+      description:
+        "List all attachments (images, files, etc.) for a specific iMessage/SMS message. Returns filename, MIME type, and file size.",
+      inputSchema: {
+        messageId: z
+          .number()
+          .int()
+          .describe("Numeric message ID to get attachments for."),
+      },
+    },
+    async ({ messageId }) => {
+      try {
+        return toolResult(messages.attachments(messageId));
+      } catch (e) {
+        if (e instanceof MacOSError) return toolError(e.message);
+        throw e;
+      }
+    },
+  );
+
+  return { server, notes, messages };
 }
 
 if (import.meta.main) {
-  const { server, notes } = createServer();
+  const { server, notes, messages } = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
   process.on("beforeExit", () => {
     notes.close();
+    messages.close();
   });
 }

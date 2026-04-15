@@ -7,7 +7,7 @@ export class MacOSError extends Error {
 
 export class DatabaseNotFoundError extends MacOSError {
   constructor(path: string) {
-    super(`NoteStore database not found or inaccessible: ${path}`);
+    super(`Database not found or inaccessible: ${path}`);
     this.name = "DatabaseNotFoundError";
   }
 }
@@ -17,7 +17,7 @@ export class DatabaseAccessDeniedError extends MacOSError {
     const app = detectTerminalApp();
     const appHint = app ? ` to "${app}"` : " to your terminal app";
     super(
-      `Access denied to NoteStore database: ${path}\n` +
+      `Access denied to database: ${path}\n` +
         `Grant Full Disk Access${appHint} in System Settings → Privacy & Security → Full Disk Access.`,
     );
     this.name = "DatabaseAccessDeniedError";

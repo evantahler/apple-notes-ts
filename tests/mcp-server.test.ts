@@ -6,14 +6,15 @@ import { createServer } from "../src/mcp-server.ts";
 
 const FIXTURE_DB = resolve(import.meta.dir, "fixtures/NoteStore.sqlite");
 const FIXTURE_DIR = resolve(import.meta.dir, "fixtures");
+const MESSAGES_FIXTURE_DB = resolve(import.meta.dir, "fixtures/chat.db");
 
 let client: Client;
 let cleanup: () => void;
 
 beforeAll(async () => {
-  const { server, notes } = createServer({
-    dbPath: FIXTURE_DB,
-    containerPath: FIXTURE_DIR,
+  const { server, notes, messages } = createServer({
+    notes: { dbPath: FIXTURE_DB, containerPath: FIXTURE_DIR },
+    messages: { dbPath: MESSAGES_FIXTURE_DB },
   });
 
   const [clientTransport, serverTransport] =
@@ -26,6 +27,7 @@ beforeAll(async () => {
 
   cleanup = () => {
     notes.close();
+    messages.close();
   };
 });
 
@@ -53,9 +55,9 @@ function getErrorText(result: any): string {
 // ============================================================================
 
 describe("server metadata", () => {
-  test("server exposes 7 tools", async () => {
+  test("server exposes 13 tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(7);
+    expect(tools).toHaveLength(13);
   });
 
   test("each tool has a description", async () => {
@@ -71,11 +73,17 @@ describe("server metadata", () => {
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
       "get_attachment_url",
+      "get_chat",
+      "get_message",
       "list_accounts",
       "list_attachments",
+      "list_chats",
       "list_folders",
+      "list_message_attachments",
+      "list_messages",
       "list_notes",
       "read_note",
+      "search_messages",
       "search_notes",
     ]);
   });
