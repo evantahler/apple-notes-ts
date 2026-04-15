@@ -72,6 +72,10 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 - 2 = Italic
 - 3 = Bold + Italic
 
+## Documentation
+
+When adding a new data source or changing the public API, update **both** `README.md` and `CLAUDE.md`. The README should include: a usage example for the TypeScript API, the MCP tools list, error types, and any new development commands.
+
 ## Versioning
 
 Always bump the patch version in `package.json` when making code changes. Use semver: patch for fixes/small changes, minor for new features, major for breaking changes. The auto-release workflow publishes to npm automatically when a new version is detected on main.

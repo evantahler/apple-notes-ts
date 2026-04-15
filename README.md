@@ -1,6 +1,6 @@
 # macos-ts
 
-TypeScript package for accessing macOS data via direct SQLite access — no AppleScript, no network calls. Currently supports **Apple Notes** with Photos and iMessage coming soon.
+TypeScript package for accessing macOS data via direct SQLite access — no AppleScript, no network calls. Currently supports **Apple Notes** and **Apple Messages** (iMessage/SMS), with Photos coming soon.
 
 ## Requirements
 
@@ -54,6 +54,40 @@ const url = db.getAttachmentUrl("attachment-uuid"); // file:// URL or null
 db.close();
 ```
 
+### Messages
+
+```typescript
+import { Messages } from "macos-ts";
+
+const db = new Messages();
+
+// List contacts and conversations
+const handles = db.handles();
+const chats = db.chats();
+const recentChats = db.chats({ search: "John", sortBy: "lastMessageDate", order: "desc", limit: 10 });
+
+// Get a specific chat
+const chat = db.getChat(chatId);
+
+// List messages in a chat (filter by date, sender, limit)
+const msgs = db.messages(chatId);
+const recent = db.messages(chatId, { limit: 20, order: "desc" });
+const filtered = db.messages(chatId, { afterDate: new Date("2024-01-01"), fromMe: true });
+
+// Get a single message
+const msg = db.getMessage(messageId);
+
+// Search across all conversations
+const results = db.search("dinner tonight");
+const inChat = db.search("dinner tonight", { chatId: 1, limit: 10 });
+
+// Attachments
+const attachments = db.attachments(messageId);
+
+// Cleanup
+db.close();
+```
+
 ## MCP Server
 
 macos-ts includes a stdio MCP server so AI agents can interact with your macOS data.
@@ -75,6 +109,8 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 
 ### Available Tools
 
+#### Notes
+
 - **list_accounts** — List all Apple Notes accounts on this Mac
 - **list_folders** — List folders, optionally filtered by account
 - **list_notes** — List notes with optional filtering (folder, account, text search), sorting (title, createdAt, modifiedAt), and limit
@@ -83,11 +119,24 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 - **list_attachments** — List attachments for a note
 - **get_attachment_url** — Get the file URL for an attachment
 
+#### Messages
+
+- **list_chats** — List iMessage/SMS conversations with optional search, sorting, and limiting
+- **get_chat** — Get details for a specific conversation by ID
+- **list_messages** — List messages in a conversation with date filtering and pagination
+- **get_message** — Get a single message by ID
+- **search_messages** — Search message text across all conversations or within a specific chat
+- **list_message_attachments** — List attachments for a specific message
+
 ## API
 
-Pass `dbPath` or `containerPath` to `new Notes()` to override auto-detection. Note content is returned as markdown — see [docs/markdown-conversion.md](docs/markdown-conversion.md) for the full formatting map.
+**Notes**: Pass `dbPath` or `containerPath` to `new Notes()` to override auto-detection. Note content is returned as markdown — see [docs/markdown-conversion.md](docs/markdown-conversion.md) for the full formatting map.
 
 Errors: `DatabaseNotFoundError` (missing DB or no Full Disk Access), `NoteNotFoundError`, `PasswordProtectedError` (locked notes can't be decrypted).
+
+**Messages**: Pass `dbPath` to `new Messages()` to override auto-detection (defaults to `~/Library/Messages/chat.db`).
+
+Errors: `DatabaseNotFoundError`, `ChatNotFoundError`, `MessageNotFoundError`.
 
 ## Development
 
@@ -96,7 +145,8 @@ bun test              # Run test suite
 bun run lint          # TypeScript type checking + Biome lint
 bun run mcp           # Start the MCP stdio server
 bun tui               # Interactive TUI for browsing and reading notes
-bun run create-fixture # Regenerate the test fixture database
+bun run create-fixture # Regenerate the Notes test fixture database
+bun run tests/fixtures/create-messages-db.ts  # Regenerate the Messages test fixture database
 ```
 
 Tests run against a checked-in fixture database — no Full Disk Access needed.
