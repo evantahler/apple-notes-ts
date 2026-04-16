@@ -11,15 +11,17 @@ const CONTACTS_FIXTURE_DB = resolve(
   import.meta.dir,
   "fixtures/AddressBook-v22.abcddb",
 );
+const PHOTOS_FIXTURE_DB = resolve(import.meta.dir, "fixtures/Photos.sqlite");
 
 let client: Client;
 let cleanup: () => void;
 
 beforeAll(async () => {
-  const { server, notes, messages, contacts } = createServer({
+  const { server, notes, messages, contacts, photos } = createServer({
     notes: { dbPath: FIXTURE_DB, containerPath: FIXTURE_DIR },
     messages: { dbPath: MESSAGES_FIXTURE_DB },
     contacts: { dbPath: CONTACTS_FIXTURE_DB },
+    photos: { dbPath: PHOTOS_FIXTURE_DB },
   });
 
   const [clientTransport, serverTransport] =
@@ -34,6 +36,7 @@ beforeAll(async () => {
     notes.close();
     messages.close();
     contacts.close();
+    photos.close();
   };
 });
 
@@ -66,9 +69,9 @@ function getErrorJson(result: any) {
 // ============================================================================
 
 describe("server metadata", () => {
-  test("server exposes 20 tools", async () => {
+  test("server exposes 26 tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(20);
+    expect(tools).toHaveLength(26);
   });
 
   test("each tool has a description", async () => {
@@ -83,12 +86,16 @@ describe("server metadata", () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
+      "get_album",
       "get_attachment_url",
       "get_capabilities",
       "get_chat",
       "get_contact",
       "get_message",
+      "get_photo",
+      "get_photo_url",
       "list_accounts",
+      "list_albums",
       "list_attachments",
       "list_chats",
       "list_contacts",
@@ -99,10 +106,12 @@ describe("server metadata", () => {
       "list_message_attachments",
       "list_messages",
       "list_notes",
+      "list_photos",
       "read_note",
       "search_contacts",
       "search_messages",
       "search_notes",
+      "search_photos",
     ]);
   });
 
@@ -139,10 +148,11 @@ describe("get_capabilities", () => {
   test("returns data sources with tool lists", async () => {
     const result = await client.callTool({ name: "get_capabilities" });
     const data = parseResult(result);
-    expect(data.dataSources).toHaveLength(3);
+    expect(data.dataSources).toHaveLength(4);
     expect(data.dataSources[0].name).toBe("Apple Notes");
     expect(data.dataSources[1].name).toBe("iMessage / SMS");
     expect(data.dataSources[2].name).toBe("Apple Contacts");
+    expect(data.dataSources[3].name).toBe("Apple Photos");
     expect(data.allToolsReadOnly).toBe(true);
     expect(data.requirement).toContain("Full Disk Access");
   });

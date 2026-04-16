@@ -1,6 +1,6 @@
 # macos-ts
 
-TypeScript package for accessing macOS data via direct SQLite access — no AppleScript, no network calls. Currently supports **Apple Notes**, **Apple Messages** (iMessage/SMS), and **Apple Contacts**, with Photos coming soon.
+TypeScript package for accessing macOS data via direct SQLite access — no AppleScript, no network calls. Currently supports **Apple Notes**, **Apple Messages** (iMessage/SMS), **Apple Contacts**, and **Apple Photos**.
 
 ## Requirements
 
@@ -119,6 +119,44 @@ const members = db.groupMembers(groupId);
 db.close();
 ```
 
+### Photos
+
+```typescript
+import { Photos } from "macos-ts";
+
+const db = new Photos();
+
+// List photos (filter by media type, favorites, date range, album)
+const allPhotos = db.photos();
+const favorites = db.photos({ favorite: true });
+const videos = db.photos({ mediaType: "video" });
+const recent = db.photos({ afterDate: new Date("2024-01-01"), limit: 20 });
+const inAlbum = db.photos({ albumId: 1 });
+
+// Get full photo details (dimensions, GPS, file size, iCloud status)
+const details = db.getPhoto(photoId);
+console.log(details.title);             // "Sunset at the Beach"
+console.log(details.locallyAvailable);  // false = iCloud only
+
+// Get file URL for a photo
+const { url, locallyAvailable } = db.getPhotoUrl(photoId);
+// url: "file:///Users/.../Photos Library.photoslibrary/originals/0/IMG_001.JPG"
+
+// List albums (user and smart albums)
+const albums = db.albums();
+const vacation = db.albums({ search: "vacation" });
+
+// Get album contents (photo IDs)
+const album = db.getAlbum(albumId);
+console.log(album.photoIds);  // [1, 5, 42, ...]
+
+// Search by filename or title
+const results = db.search("sunset");
+
+// Cleanup
+db.close();
+```
+
 ## MCP Server
 
 macos-ts includes a stdio MCP server so AI agents can interact with your macOS data.
@@ -172,6 +210,15 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 - **list_groups** — List all contact groups with member counts
 - **list_group_members** — List contacts in a specific group
 
+#### Photos
+
+- **list_photos** — List photos/videos with filtering by media type, favorites, date range, album, and sorting
+- **get_photo** — Get full photo metadata (dimensions, GPS, file size, iCloud availability)
+- **get_photo_url** — Get the local file:// URL for a photo's original file
+- **list_albums** — List user-created and smart albums with photo counts
+- **get_album** — Get album details and list of photo IDs
+- **search_photos** — Search photos by filename or title
+
 ### Tool Response Format
 
 All tools return responses in a structured envelope:
@@ -216,6 +263,10 @@ Errors: `DatabaseNotFoundError`, `ChatNotFoundError`, `MessageNotFoundError`.
 
 Errors: `DatabaseNotFoundError`, `ContactNotFoundError`, `GroupNotFoundError`.
 
+**Photos**: Pass `dbPath` to `new Photos()` to override auto-detection (defaults to `~/Pictures/Photos Library.photoslibrary/database/Photos.sqlite`). The `getPhotoUrl` method resolves the original file path and indicates whether the photo is locally available or iCloud-only.
+
+Errors: `DatabaseNotFoundError`, `PhotoNotFoundError`, `AlbumNotFoundError`.
+
 ## Development
 
 ```bash
@@ -226,6 +277,7 @@ bun tui               # Interactive TUI for browsing and reading notes
 bun run create-fixture # Regenerate the Notes test fixture database
 bun run tests/fixtures/create-messages-db.ts   # Regenerate the Messages test fixture database
 bun run tests/fixtures/create-contacts-db.ts   # Regenerate the Contacts test fixture database
+bun run tests/fixtures/create-photos-db.ts     # Regenerate the Photos test fixture database
 ```
 
 Tests run against a checked-in fixture database — no Full Disk Access needed.

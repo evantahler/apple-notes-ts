@@ -1,5 +1,5 @@
 /**
- * Interactive TUI for browsing Apple Notes, Messages, and Contacts.
+ * Interactive TUI for browsing Apple Notes, Messages, Contacts, and Photos.
  *
  * Requires Full Disk Access for the terminal running this script.
  * Run with: bun tui
@@ -9,6 +9,7 @@ import { Contacts } from "./src/contacts/index.ts";
 import { DatabaseAccessDeniedError } from "./src/index.ts";
 import { Messages } from "./src/messages/index.ts";
 import { Notes } from "./src/notes/index.ts";
+import { Photos } from "./src/photos/index.ts";
 import {
   doContactsSearch,
   drawContactsTab,
@@ -41,12 +42,20 @@ import {
   loadNotesForFolder,
   selectTreeItem,
 } from "./tui/notes.ts";
+import {
+  doPhotosSearch,
+  drawPhotosTab,
+  handlePhotosInput,
+  loadPhotosForAlbum,
+  selectAlbum,
+} from "./tui/photos.ts";
 
 // ── State ───────────────────────────────────────────────────────────────────
 
 let notesDb: Notes;
 let messagesDb: Messages;
 let contactsDb: Contacts;
+let photosDb: Photos;
 
 const state: AppState = {
   tab: "notes",
@@ -88,6 +97,18 @@ const state: AppState = {
     detailLines: [],
     detailScroll: 0,
   },
+  photosState: {
+    focus: "albums",
+    albums: [],
+    albumIndex: 0,
+    albumScroll: 0,
+    photos: [],
+    allPhotos: [],
+    photoIndex: 0,
+    photoScroll: 0,
+    detailLines: [],
+    detailScroll: 0,
+  },
 };
 
 // ── Drawing ─────────────────────────────────────────────────────────────────
@@ -106,8 +127,12 @@ function drawTabBar(): string {
     state.tab === "contacts"
       ? `${term.bold}${term.underline} 3 Contacts ${term.reset}${term.inverse}`
       : `${term.dim} 3 Contacts ${term.reset}${term.inverse}`;
+  const photosTab =
+    state.tab === "photos"
+      ? `${term.bold}${term.underline} 4 Photos ${term.reset}${term.inverse}`
+      : `${term.dim} 4 Photos ${term.reset}${term.inverse}`;
 
-  const tabText = `${notesTab}  ${msgsTab}  ${contactsTab} `;
+  const tabText = `${notesTab}  ${msgsTab}  ${contactsTab}  ${photosTab} `;
   const tabVis = visibleLength(tabText);
   return `${term.inverse}${tabText}${" ".repeat(Math.max(0, tc - tabVis))}${term.reset}`;
 }
@@ -127,8 +152,10 @@ function draw() {
     buf += drawNotesTab(state);
   } else if (state.tab === "messages") {
     buf += drawMessagesTab(state);
-  } else {
+  } else if (state.tab === "contacts") {
     buf += drawContactsTab(state);
+  } else {
+    buf += drawPhotosTab(state);
   }
 
   // Footer bar
@@ -156,8 +183,10 @@ function clearSearch() {
     loadNotesForFolder(state, notesDb);
   } else if (state.tab === "messages") {
     loadChats(state, messagesDb);
-  } else {
+  } else if (state.tab === "contacts") {
     loadContactsForGroup(state, contactsDb);
+  } else {
+    loadPhotosForAlbum(state, photosDb);
   }
 }
 
@@ -167,6 +196,7 @@ function cleanup() {
   notesDb.close();
   messagesDb.close();
   contactsDb.close();
+  photosDb.close();
 }
 
 function handleInput(data: Buffer) {
@@ -183,7 +213,8 @@ function handleInput(data: Buffer) {
     } else if (s === "\r" || s === "\n") {
       if (state.tab === "notes") doNotesSearch(state, notesDb);
       else if (state.tab === "messages") doMessagesSearch(state, messagesDb);
-      else doContactsSearch(state, contactsDb);
+      else if (state.tab === "contacts") doContactsSearch(state, contactsDb);
+      else doPhotosSearch(state, photosDb);
     } else if (s === "\x7f" || s === "\b") {
       state.searchQuery = state.searchQuery.slice(0, -1);
     } else if (s.length === 1 && s >= " ") {
@@ -227,6 +258,18 @@ function handleInput(data: Buffer) {
       }
       draw();
       return;
+    case "4":
+      if (state.tab !== "photos") {
+        state.tab = "photos";
+        state.statusMessage = "";
+        if (state.photosState.allPhotos.length === 0) {
+          state.photosState.allPhotos = photosDb.photos({ limit: 500 });
+          state.photosState.albums = photosDb.albums();
+          selectAlbum(state, photosDb, 0);
+        }
+      }
+      draw();
+      return;
     case "/":
       state.searchMode = true;
       state.searchQuery = "";
@@ -243,8 +286,10 @@ function handleInput(data: Buffer) {
     handleNotesInput(state, notesDb, s);
   } else if (state.tab === "messages") {
     handleMessagesInput(state, messagesDb, s);
-  } else {
+  } else if (state.tab === "contacts") {
     handleContactsInput(state, contactsDb, s);
+  } else {
+    handlePhotosInput(state, photosDb, s);
   }
 
   draw();
@@ -269,6 +314,7 @@ function initDb<T>(DbClass: new () => T): T {
 notesDb = initDb(Notes);
 messagesDb = initDb(Messages);
 contactsDb = initDb(Contacts);
+photosDb = initDb(Photos);
 
 state.notesState.allNotes = notesDb.notes();
 state.notesState.tree = buildFolderTree(notesDb);

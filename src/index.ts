@@ -68,4 +68,23 @@ export {
   Notes,
   PasswordProtectedError,
 } from "./notes/index.ts";
+export type {
+  Album,
+  AlbumContents,
+  AlbumId,
+  ListAlbumsOptions,
+  ListPhotosOptions,
+  MediaType,
+  PhotoDetails,
+  PhotoId,
+  PhotoMeta,
+  PhotoSortField,
+  PhotosOptions,
+  SearchPhotosOptions,
+} from "./photos/index.ts";
+export {
+  AlbumNotFoundError,
+  PhotoNotFoundError,
+  Photos,
+} from "./photos/index.ts";
 export type { SortOrder } from "./types.ts";

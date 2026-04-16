@@ -1,6 +1,7 @@
 import type { Contact, ContactDetails, Group } from "../src/contacts/index.ts";
 import type { Chat, MessageMeta } from "../src/messages/index.ts";
 import type { AttachmentRef, Folder, NoteMeta } from "../src/notes/index.ts";
+import type { Album, PhotoMeta } from "../src/photos/index.ts";
 
 // ── Terminal constants ──────────────────────────────────────────────────────
 
@@ -129,6 +130,17 @@ export function messagePanelWidth(): number {
   return totalCols() - chatPanelWidth() - 1;
 }
 
+// Photos layout
+export function photoAlbumPanelWidth(): number {
+  return Math.max(20, Math.min(30, Math.floor(totalCols() * 0.18)));
+}
+export function photoListPanelWidth(): number {
+  return Math.max(25, Math.min(45, Math.floor(totalCols() * 0.3)));
+}
+export function photoDetailPanelWidth(): number {
+  return totalCols() - photoAlbumPanelWidth() - photoListPanelWidth() - 2;
+}
+
 // Contacts layout
 export function groupPanelWidth(): number {
   return Math.max(20, Math.min(30, Math.floor(totalCols() * 0.18)));
@@ -142,10 +154,11 @@ export function contactDetailPanelWidth(): number {
 
 // ── State types ─────────────────────────────────────────────────────────────
 
-export type Tab = "notes" | "messages" | "contacts";
+export type Tab = "notes" | "messages" | "contacts" | "photos";
 export type NotesPanel = "folders" | "notes" | "content";
 export type MessagesPanel = "chats" | "messages";
 export type ContactsPanel = "groups" | "contacts" | "details";
+export type PhotosPanel = "albums" | "photos" | "details";
 
 export interface TreeItem {
   label: string;
@@ -192,6 +205,19 @@ export interface ContactsState {
   detailScroll: number;
 }
 
+export interface PhotosState {
+  focus: PhotosPanel;
+  albums: Album[];
+  albumIndex: number;
+  albumScroll: number;
+  photos: PhotoMeta[];
+  allPhotos: PhotoMeta[];
+  photoIndex: number;
+  photoScroll: number;
+  detailLines: string[];
+  detailScroll: number;
+}
+
 export interface AppState {
   tab: Tab;
   searchMode: boolean;
@@ -200,6 +226,7 @@ export interface AppState {
   notesState: NotesState;
   messagesState: MessagesState;
   contactsState: ContactsState;
+  photosState: PhotosState;
 }
 
 // ── DRY helpers ─────────────────────────────────────────────────────────────
@@ -269,7 +296,7 @@ export function handleScrollKeys(
  * Build the footer bar for a tab.
  */
 export function buildFooter(tab: Tab): string {
-  const base = `${term.dim}1/2/3${term.reset} tabs  ${term.dim}\u2190\u2192${term.reset} panels  ${term.dim}\u2191\u2193${term.reset} navigate  ${term.dim}j/k${term.reset} scroll`;
+  const base = `${term.dim}1/2/3/4${term.reset} tabs  ${term.dim}\u2190\u2192${term.reset} panels  ${term.dim}\u2191\u2193${term.reset} navigate  ${term.dim}j/k${term.reset} scroll`;
   const open = tab === "notes" ? `  ${term.dim}o${term.reset} open` : "";
   return ` ${base}${open}  ${term.dim}/${term.reset} search  ${term.dim}q${term.reset} quit`;
 }
