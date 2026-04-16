@@ -39,11 +39,13 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 
 - `src/index.ts` — Package barrel export
 - `src/errors.ts` — Base `MacOSError` class and shared errors (DatabaseNotFoundError, DatabaseAccessDeniedError)
-- `src/mcp-server.ts` — Stdio MCP server wrapping all data source APIs as tools
+- `src/mcp-server.ts` — Slim MCP server orchestrator (creates instances, registers tools from feature modules)
+- `src/mcp-helpers.ts` — Shared MCP helpers (wrapTool, toolError, readOnlyAnnotations, McpServerInstance type)
 - `src/notes/notes.ts` — Main `Notes` class (public API for Apple Notes)
 - `src/notes/index.ts` — Notes barrel export
 - `src/notes/types.ts` — TypeScript type definitions for Notes
 - `src/notes/errors.ts` — Notes-specific errors (NoteNotFoundError, PasswordProtectedError)
+- `src/notes/mcp-tools.ts` — Notes MCP tool registrations and capability constant
 - `src/notes/protobuf/notestore.proto` — Reverse-engineered protobuf schema
 - `src/notes/protobuf/decode.ts` — Gzip decompress + protobuf decode
 - `src/notes/conversion/proto-to-markdown.ts` — AttributeRun[] → markdown
@@ -55,6 +57,7 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 - `src/messages/index.ts` — Messages barrel export
 - `src/messages/types.ts` — TypeScript type definitions for Messages
 - `src/messages/errors.ts` — Messages-specific errors (ChatNotFoundError, MessageNotFoundError)
+- `src/messages/mcp-tools.ts` — Messages MCP tool registrations and capability constant
 - `src/messages/database/connection.ts` — Messages SQLite database connection
 - `src/messages/database/queries.ts` — Messages SQL queries and nanosecond time conversion
 - `src/messages/database/reader.ts` — Messages query execution, row mapping, and attributedBody decoding
@@ -62,9 +65,15 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 - `src/contacts/index.ts` — Contacts barrel export
 - `src/contacts/types.ts` — TypeScript type definitions for Contacts
 - `src/contacts/errors.ts` — Contacts-specific errors (ContactNotFoundError, GroupNotFoundError)
+- `src/contacts/mcp-tools.ts` — Contacts MCP tool registrations and capability constant
 - `src/contacts/database/connection.ts` — Contacts SQLite database connection
 - `src/contacts/database/queries.ts` — Contacts SQL queries and Mac time re-exports
 - `src/contacts/database/reader.ts` — Contacts query execution, row mapping, label cleaning
+- `tui.ts` — Slim TUI orchestrator (state, tab bar, input dispatch, main init)
+- `tui/helpers.ts` — Shared TUI utilities (terminal codes, layout, state types, DRY helpers)
+- `tui/notes.ts` — Notes TUI (folder tree, actions, drawing, input, search)
+- `tui/messages.ts` — Messages TUI (actions, drawing, input, search, message formatting)
+- `tui/contacts.ts` — Contacts TUI (actions, drawing, input, search, contact detail rendering)
 - `tests/fixtures/create-test-db.ts` — Generates the test NoteStore.sqlite
 - `tests/fixtures/create-messages-db.ts` — Generates the test chat.db
 - `tests/fixtures/create-contacts-db.ts` — Generates the test AddressBook-v22.abcddb
@@ -91,7 +100,7 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 
 Reference: [Patterns for Agentic Tools](https://arcade.dev/patterns/llm.txt)
 
-When adding or modifying MCP tools in `src/mcp-server.ts`, follow these patterns:
+When adding or modifying MCP tools in `src/<feature>/mcp-tools.ts`, follow these patterns:
 
 ### Tool Classification
 

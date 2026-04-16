@@ -5,210 +5,44 @@
  * Run with: bun tui
  */
 
-import type { Contact, ContactDetails, Group } from "./src/contacts/index.ts";
 import { Contacts } from "./src/contacts/index.ts";
-import type { AttachmentRef, Folder, NoteMeta } from "./src/index.ts";
-import {
-  DatabaseAccessDeniedError,
-  Notes,
-  PasswordProtectedError,
-} from "./src/index.ts";
-import type { Chat, MessageMeta } from "./src/messages/index.ts";
+import { DatabaseAccessDeniedError } from "./src/index.ts";
 import { Messages } from "./src/messages/index.ts";
+import { Notes } from "./src/notes/index.ts";
+import {
+  doContactsSearch,
+  drawContactsTab,
+  handleContactsInput,
+  loadContactsForGroup,
+  selectGroup,
+} from "./tui/contacts.ts";
+import {
+  type AppState,
+  buildFooter,
+  moveTo,
+  pad,
+  term,
+  totalCols,
+  totalRows,
+  visibleLength,
+  write,
+} from "./tui/helpers.ts";
+import {
+  doMessagesSearch,
+  drawMessagesTab,
+  handleMessagesInput,
+  loadChats,
+} from "./tui/messages.ts";
+import {
+  buildFolderTree,
+  doNotesSearch,
+  drawNotesTab,
+  handleNotesInput,
+  loadNotesForFolder,
+  selectTreeItem,
+} from "./tui/notes.ts";
 
-// ── Terminal helpers ─────────────────────────────────────────────────────────
-
-const ESC = "\x1b";
-const CSI = `${ESC}[`;
-
-const term = {
-  altScreenOn: `${CSI}?1049h`,
-  altScreenOff: `${CSI}?1049l`,
-  cursorHide: `${CSI}?25l`,
-  cursorShow: `${CSI}?25h`,
-  clear: `${CSI}2J`,
-  reset: `${CSI}0m`,
-  bold: `${CSI}1m`,
-  dim: `${CSI}2m`,
-  italic: `${CSI}3m`,
-  underline: `${CSI}4m`,
-  inverse: `${CSI}7m`,
-  fg: {
-    red: `${CSI}31m`,
-    green: `${CSI}32m`,
-    yellow: `${CSI}33m`,
-    blue: `${CSI}34m`,
-    magenta: `${CSI}35m`,
-    cyan: `${CSI}36m`,
-    gray: `${CSI}90m`,
-  },
-};
-
-function moveTo(row: number, col: number): string {
-  return `${CSI}${row + 1};${col + 1}H`;
-}
-
-/** Wrap text as a clickable OSC 8 hyperlink. */
-function hyperlink(url: string, text: string): string {
-  return `${ESC}]8;;${url}\x07${text}${ESC}]8;;\x07`;
-}
-
-// biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape sequences and OSC 8 hyperlinks
-const ANSI_RE = /\x1b\[[0-9;]*m|\x1b\]8;;[^\x07]*\x07/g;
-
-function stripAnsi(s: string): string {
-  return s.replace(ANSI_RE, "");
-}
-
-function visibleLength(s: string): number {
-  return stripAnsi(s).length;
-}
-
-function truncate(s: string, max: number): string {
-  let visible = 0;
-  let result = "";
-  let i = 0;
-  while (i < s.length) {
-    // Skip CSI sequences (e.g. \x1b[1m)
-    if (s[i] === "\x1b" && s[i + 1] === "[") {
-      const end = s.indexOf("m", i);
-      if (end !== -1) {
-        result += s.slice(i, end + 1);
-        i = end + 1;
-        continue;
-      }
-    }
-    // Skip OSC 8 hyperlink sequences (e.g. \x1b]8;;url\x07)
-    if (s[i] === "\x1b" && s[i + 1] === "]") {
-      const end = s.indexOf("\x07", i);
-      if (end !== -1) {
-        result += s.slice(i, end + 1);
-        i = end + 1;
-        continue;
-      }
-    }
-    if (visible >= max) break;
-    result += s[i];
-    visible++;
-    i++;
-  }
-  return result + term.reset;
-}
-
-function pad(s: string, width: number): string {
-  const vl = visibleLength(s);
-  if (vl >= width) return truncate(s, width);
-  return s + " ".repeat(width - vl);
-}
-
-function write(s: string) {
-  process.stdout.write(s);
-}
-
-// ── Folder tree (Notes) ─────────────────────────────────────────────────────
-
-interface TreeItem {
-  label: string;
-  folder: Folder | null;
-  isAccount: boolean;
-  indent: number;
-}
-
-function buildFolderTree(notesDb: Notes): TreeItem[] {
-  const items: TreeItem[] = [];
-  const folders = notesDb.folders();
-  const allNotes = notesDb.notes();
-
-  items.push({
-    label: `All Notes (${allNotes.length})`,
-    folder: null,
-    isAccount: false,
-    indent: 0,
-  });
-
-  const grouped = new Map<string, Folder[]>();
-  for (const folder of folders) {
-    const key = folder.accountName || "Other";
-    const list = grouped.get(key) ?? [];
-    list.push(folder);
-    grouped.set(key, list);
-  }
-
-  for (const [accountName, accountFolders] of grouped) {
-    items.push({
-      label: accountName,
-      folder: null,
-      isAccount: true,
-      indent: 0,
-    });
-
-    for (const folder of accountFolders) {
-      items.push({
-        label: `${folder.name} (${folder.noteCount})`,
-        folder,
-        isAccount: false,
-        indent: 1,
-      });
-    }
-  }
-
-  return items;
-}
-
-// ── State ────────────────────────────────────────────────────────────────────
-
-type Tab = "notes" | "messages" | "contacts";
-type NotesPanel = "folders" | "notes" | "content";
-type MessagesPanel = "chats" | "messages";
-type ContactsPanel = "groups" | "contacts" | "details";
-
-interface NotesState {
-  focus: NotesPanel;
-  tree: TreeItem[];
-  treeIndex: number;
-  treeScroll: number;
-  notes: NoteMeta[];
-  allNotes: NoteMeta[];
-  noteIndex: number;
-  noteScroll: number;
-  contentLines: string[];
-  contentScroll: number;
-  rawMarkdown: string;
-  attachments: AttachmentRef[];
-}
-
-interface MessagesState {
-  focus: MessagesPanel;
-  chats: Chat[];
-  chatIndex: number;
-  chatScroll: number;
-  messages: MessageMeta[];
-  messageScroll: number;
-}
-
-interface ContactsState {
-  focus: ContactsPanel;
-  groups: Group[];
-  groupIndex: number;
-  groupScroll: number;
-  contacts: Contact[];
-  allContacts: Contact[];
-  contactIndex: number;
-  contactScroll: number;
-  details: ContactDetails | null;
-  detailLines: string[];
-  detailScroll: number;
-}
-
-interface AppState {
-  tab: Tab;
-  searchMode: boolean;
-  searchQuery: string;
-  statusMessage: string;
-  notesState: NotesState;
-  messagesState: MessagesState;
-  contactsState: ContactsState;
-}
+// ── State ───────────────────────────────────────────────────────────────────
 
 let notesDb: Notes;
 let messagesDb: Messages;
@@ -256,457 +90,7 @@ const state: AppState = {
   },
 };
 
-// ── Layout ───────────────────────────────────────────────────────────────────
-
-function totalCols(): number {
-  return process.stdout.columns || 80;
-}
-function totalRows(): number {
-  return process.stdout.rows || 24;
-}
-
-// Notes layout
-function folderPanelWidth(): number {
-  return Math.max(20, Math.min(35, Math.floor(totalCols() * 0.2)));
-}
-function notePanelWidth(): number {
-  return Math.max(25, Math.min(45, Math.floor(totalCols() * 0.25)));
-}
-function contentPanelWidth(): number {
-  return totalCols() - folderPanelWidth() - notePanelWidth() - 2;
-}
-
-// Messages layout
-function chatPanelWidth(): number {
-  return Math.max(25, Math.min(45, Math.floor(totalCols() * 0.3)));
-}
-function messagePanelWidth(): number {
-  return totalCols() - chatPanelWidth() - 1;
-}
-
-// Contacts layout
-function groupPanelWidth(): number {
-  return Math.max(20, Math.min(30, Math.floor(totalCols() * 0.18)));
-}
-function contactListPanelWidth(): number {
-  return Math.max(25, Math.min(40, Math.floor(totalCols() * 0.25)));
-}
-function contactDetailPanelWidth(): number {
-  return totalCols() - groupPanelWidth() - contactListPanelWidth() - 2;
-}
-
-function bodyRows(): number {
-  return totalRows() - 3; // tab bar + header + footer
-}
-
-// ── Markdown rendering ───────────────────────────────────────────────────────
-
-function renderMarkdown(markdown: string, width: number): string[] {
-  const rendered = Bun.markdown.ansi(markdown, {
-    columns: Math.max(width - 2, 20),
-    hyperlinks: true,
-  });
-  return rendered.split("\n");
-}
-
-// ── Notes Actions ───────────────────────────────────────────────────────────
-
-function loadNotesForFolder() {
-  const ns = state.notesState;
-  const item = ns.tree[ns.treeIndex];
-  if (!item || item.isAccount) return;
-
-  if (item.folder === null) {
-    ns.notes = ns.allNotes;
-  } else {
-    ns.notes = ns.allNotes.filter((n) => n.folderId === item.folder?.id);
-  }
-  ns.noteIndex = 0;
-  ns.noteScroll = 0;
-  state.statusMessage = "";
-  loadSelectedNote();
-}
-
-function loadSelectedNote() {
-  const ns = state.notesState;
-  const note = ns.notes[ns.noteIndex];
-  if (!note) {
-    ns.contentLines = [];
-    ns.contentScroll = 0;
-    return;
-  }
-  ns.contentScroll = 0;
-  ns.attachments = [];
-  ns.rawMarkdown = "";
-  try {
-    const content = notesDb.read(note.id);
-    ns.rawMarkdown = content.markdown;
-    ns.contentLines = renderMarkdown(content.markdown, contentPanelWidth());
-
-    ns.attachments = notesDb.listAttachments(note.id);
-
-    const inlineRe = /!\[.*?\]\(attachment:([^?)]+)/g;
-    const seenIds = new Set(ns.attachments.map((a) => String(a.id)));
-    for (const match of content.markdown.matchAll(inlineRe)) {
-      const id = match[1] as string;
-      if (seenIds.has(id)) continue;
-      seenIds.add(id);
-      const url = notesDb.getAttachmentUrl(id);
-      ns.attachments.push({
-        id: 0,
-        identifier: id,
-        name: id,
-        contentType: "",
-        url,
-      });
-    }
-
-    if (ns.attachments.length > 0) {
-      ns.contentLines.push(
-        "",
-        `${term.dim}── Attachments (${ns.attachments.length}) — press ${term.reset}o${term.dim} to open ──${term.reset}`,
-      );
-      for (const a of ns.attachments) {
-        const label = a.name || a.id;
-        const path = a.url
-          ? hyperlink(
-              a.url,
-              `${term.fg.cyan}${term.underline}${a.url}${term.reset}`,
-            )
-          : `${term.dim}(unresolved)${term.reset}`;
-        ns.contentLines.push(
-          `  ${label} ${a.contentType ? `${term.dim}(${a.contentType})${term.reset} ` : ""}`,
-          `    ${path}`,
-        );
-      }
-    }
-  } catch (err) {
-    if (err instanceof PasswordProtectedError) {
-      ns.contentLines = [
-        "",
-        `  ${term.dim}This note is password protected.${term.reset}`,
-      ];
-    } else {
-      ns.contentLines = [
-        "",
-        `  ${term.fg.red}Error reading note: ${err}${term.reset}`,
-      ];
-    }
-  }
-}
-
-function selectTreeItem(index: number) {
-  const ns = state.notesState;
-  const br = bodyRows();
-  const prev = ns.treeIndex;
-  const dir = index >= prev ? 1 : -1;
-  ns.treeIndex = Math.max(0, Math.min(index, ns.tree.length - 1));
-
-  while (
-    ns.tree[ns.treeIndex]?.isAccount &&
-    ns.treeIndex + dir >= 0 &&
-    ns.treeIndex + dir < ns.tree.length
-  ) {
-    ns.treeIndex += dir;
-  }
-  if (ns.tree[ns.treeIndex]?.isAccount) {
-    ns.treeIndex = prev;
-  }
-
-  if (ns.treeIndex < ns.treeScroll) {
-    ns.treeScroll = ns.treeIndex;
-  } else if (ns.treeIndex >= ns.treeScroll + br) {
-    ns.treeScroll = ns.treeIndex - br + 1;
-  }
-
-  loadNotesForFolder();
-}
-
-function selectNote(index: number) {
-  const ns = state.notesState;
-  const br = bodyRows();
-  ns.noteIndex = Math.max(0, Math.min(index, ns.notes.length - 1));
-
-  if (ns.noteIndex < ns.noteScroll) {
-    ns.noteScroll = ns.noteIndex;
-  } else if (ns.noteIndex >= ns.noteScroll + br) {
-    ns.noteScroll = ns.noteIndex - br + 1;
-  }
-
-  loadSelectedNote();
-}
-
-// ── Messages Actions ────────────────────────────────────────────────────────
-
-function loadChats() {
-  const ms = state.messagesState;
-  ms.chats = messagesDb.chats();
-  ms.chatIndex = 0;
-  ms.chatScroll = 0;
-  loadSelectedChat();
-}
-
-function loadSelectedChat() {
-  const ms = state.messagesState;
-  const chat = ms.chats[ms.chatIndex];
-  if (!chat) {
-    ms.messages = [];
-    ms.messageScroll = 0;
-    return;
-  }
-  ms.messageScroll = 0;
-  ms.messages = messagesDb.messages(chat.id, { order: "asc" });
-  // Auto-scroll to bottom (newest messages)
-  const maxScroll = Math.max(0, ms.messages.length - bodyRows());
-  ms.messageScroll = maxScroll;
-}
-
-function selectChat(index: number) {
-  const ms = state.messagesState;
-  const br = bodyRows();
-  ms.chatIndex = Math.max(0, Math.min(index, ms.chats.length - 1));
-
-  if (ms.chatIndex < ms.chatScroll) {
-    ms.chatScroll = ms.chatIndex;
-  } else if (ms.chatIndex >= ms.chatScroll + br) {
-    ms.chatScroll = ms.chatIndex - br + 1;
-  }
-
-  loadSelectedChat();
-}
-
-// ── Contacts Actions ───────────────────────────────────────────────────────
-
-function loadContactsForGroup() {
-  const cs = state.contactsState;
-  if (cs.groupIndex === 0) {
-    // "All Contacts"
-    cs.contacts = cs.allContacts;
-  } else {
-    const group = cs.groups[cs.groupIndex - 1];
-    if (group) {
-      cs.contacts = contactsDb.groupMembers(group.id);
-    }
-  }
-  cs.contactIndex = 0;
-  cs.contactScroll = 0;
-  state.statusMessage = "";
-  loadSelectedContact();
-}
-
-function buildContactDetailLines(d: ContactDetails, width: number): string[] {
-  const lines: string[] = [];
-  const w = Math.max(20, width - 2);
-
-  // Name header
-  lines.push(`${term.bold}${d.displayName}${term.reset}`);
-  if (d.organization) {
-    lines.push(`${term.fg.gray}${d.organization}${term.reset}`);
-  }
-  if (d.jobTitle || d.department) {
-    const parts = [d.jobTitle, d.department].filter(Boolean).join(", ");
-    lines.push(`${term.fg.gray}${parts}${term.reset}`);
-  }
-  lines.push("");
-
-  // Phones
-  if (d.phones.length > 0) {
-    lines.push(`${term.bold}Phone${term.reset}`);
-    for (const p of d.phones) {
-      const label = p.label ? `${term.fg.gray}${p.label}${term.reset} ` : "";
-      const primary = p.isPrimary ? ` ${term.fg.cyan}★${term.reset}` : "";
-      lines.push(`  ${label}${p.number}${primary}`);
-    }
-    lines.push("");
-  }
-
-  // Emails
-  if (d.emails.length > 0) {
-    lines.push(`${term.bold}Email${term.reset}`);
-    for (const e of d.emails) {
-      const label = e.label ? `${term.fg.gray}${e.label}${term.reset} ` : "";
-      const primary = e.isPrimary ? ` ${term.fg.cyan}★${term.reset}` : "";
-      lines.push(`  ${label}${e.address}${primary}`);
-    }
-    lines.push("");
-  }
-
-  // Addresses
-  if (d.addresses.length > 0) {
-    lines.push(`${term.bold}Address${term.reset}`);
-    for (const a of d.addresses) {
-      const label = a.label ? `${term.fg.gray}${a.label}${term.reset}` : "";
-      if (label) lines.push(`  ${label}`);
-      if (a.street) lines.push(`  ${a.street}`);
-      const cityState = [a.city, a.state, a.zipCode].filter(Boolean).join(", ");
-      if (cityState) lines.push(`  ${cityState}`);
-      if (a.country) lines.push(`  ${a.country}`);
-    }
-    lines.push("");
-  }
-
-  // URLs
-  if (d.urls.length > 0) {
-    lines.push(`${term.bold}URL${term.reset}`);
-    for (const u of d.urls) {
-      const label = u.label ? `${term.fg.gray}${u.label}${term.reset} ` : "";
-      lines.push(
-        `  ${label}${term.fg.cyan}${term.underline}${u.url}${term.reset}`,
-      );
-    }
-    lines.push("");
-  }
-
-  // Social profiles
-  if (d.socialProfiles.length > 0) {
-    lines.push(`${term.bold}Social${term.reset}`);
-    for (const sp of d.socialProfiles) {
-      const service = sp.service
-        ? `${term.fg.gray}${sp.service}${term.reset} `
-        : "";
-      const handle = sp.username || sp.url || "";
-      lines.push(`  ${service}${handle}`);
-    }
-    lines.push("");
-  }
-
-  // Related names
-  if (d.relatedNames.length > 0) {
-    lines.push(`${term.bold}Related${term.reset}`);
-    for (const r of d.relatedNames) {
-      const label = r.label ? `${term.fg.gray}${r.label}${term.reset} ` : "";
-      lines.push(`  ${label}${r.name}`);
-    }
-    lines.push("");
-  }
-
-  // Dates
-  if (d.birthday) {
-    lines.push(
-      `${term.bold}Birthday${term.reset}  ${d.birthday.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`,
-    );
-  }
-  if (d.dates.length > 0) {
-    for (const dt of d.dates) {
-      const label = dt.label ? `${term.bold}${dt.label}${term.reset}  ` : "";
-      lines.push(
-        `${label}${dt.date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`,
-      );
-    }
-  }
-  if (d.birthday || d.dates.length > 0) lines.push("");
-
-  // Note
-  if (d.note) {
-    lines.push(`${term.bold}Note${term.reset}`);
-    const noteLines = d.note.split("\n");
-    for (const nl of noteLines) {
-      lines.push(`  ${truncate(nl, w)}`);
-    }
-    lines.push("");
-  }
-
-  // Metadata
-  lines.push(
-    `${term.dim}Created: ${d.createdAt.toLocaleDateString()}  Modified: ${d.modifiedAt.toLocaleDateString()}${term.reset}`,
-  );
-
-  return lines;
-}
-
-function loadSelectedContact() {
-  const cs = state.contactsState;
-  const contact = cs.contacts[cs.contactIndex];
-  if (!contact) {
-    cs.details = null;
-    cs.detailLines = [];
-    cs.detailScroll = 0;
-    return;
-  }
-  cs.detailScroll = 0;
-  try {
-    cs.details = contactsDb.getContact(contact.id);
-    cs.detailLines = buildContactDetailLines(
-      cs.details,
-      contactDetailPanelWidth(),
-    );
-  } catch {
-    cs.details = null;
-    cs.detailLines = [
-      "",
-      `  ${term.fg.red}Error loading contact details${term.reset}`,
-    ];
-  }
-}
-
-function selectGroup(index: number) {
-  const cs = state.contactsState;
-  const br = bodyRows();
-  const maxIndex = cs.groups.length; // +1 for "All Contacts" row at index 0
-  cs.groupIndex = Math.max(0, Math.min(index, maxIndex));
-
-  if (cs.groupIndex < cs.groupScroll) {
-    cs.groupScroll = cs.groupIndex;
-  } else if (cs.groupIndex >= cs.groupScroll + br) {
-    cs.groupScroll = cs.groupIndex - br + 1;
-  }
-
-  loadContactsForGroup();
-}
-
-function selectContact(index: number) {
-  const cs = state.contactsState;
-  const br = bodyRows();
-  cs.contactIndex = Math.max(0, Math.min(index, cs.contacts.length - 1));
-
-  if (cs.contactIndex < cs.contactScroll) {
-    cs.contactScroll = cs.contactIndex;
-  } else if (cs.contactIndex >= cs.contactScroll + br) {
-    cs.contactScroll = cs.contactIndex - br + 1;
-  }
-
-  loadSelectedContact();
-}
-
-// ── Messages rendering ──────────────────────────────────────────────────────
-
-function formatMessageLine(
-  msg: MessageMeta,
-  width: number,
-): { line1: string; line2: string } {
-  const time = msg.date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-  const date = msg.date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-
-  const sender = msg.isFromMe
-    ? `${term.fg.blue}You${term.reset}`
-    : `${term.fg.green}${msg.senderHandle}${term.reset}`;
-
-  const svcBadge =
-    msg.service === "SMS"
-      ? `${term.fg.green} SMS${term.reset}`
-      : msg.service === "RCS"
-        ? `${term.fg.magenta} RCS${term.reset}`
-        : "";
-
-  const line1 = ` ${sender}${svcBadge}  ${term.dim}${date} ${time}${term.reset}`;
-
-  let text = msg.text.replace(/\n/g, " ");
-  if (msg.isAudioMessage && !text.trim()) text = "🎤 Audio message";
-  if (msg.hasAttachments && !text.trim()) text = "📎 Attachment";
-  const textWidth = Math.max(10, width - 4);
-  const line2 = `   ${truncate(text, textWidth)}`;
-
-  return { line1, line2 };
-}
-
-// ── Drawing ──────────────────────────────────────────────────────────────────
+// ── Drawing ─────────────────────────────────────────────────────────────────
 
 function drawTabBar(): string {
   const tc = totalCols();
@@ -728,287 +112,6 @@ function drawTabBar(): string {
   return `${term.inverse}${tabText}${" ".repeat(Math.max(0, tc - tabVis))}${term.reset}`;
 }
 
-function drawNotesTab(): string {
-  const ns = state.notesState;
-  const tc = totalCols();
-  const fw = folderPanelWidth();
-  const nw = notePanelWidth();
-  const cw = contentPanelWidth();
-  const br = bodyRows();
-
-  let buf = "";
-
-  // Header
-  const folderLabel =
-    ns.focus === "folders"
-      ? `${term.underline}Folders${term.reset}${term.inverse}${term.bold}`
-      : "Folders";
-  const noteLabel =
-    ns.focus === "notes"
-      ? `${term.underline}Notes${term.reset}${term.inverse}${term.bold}`
-      : "Notes";
-  const contentLabel =
-    ns.focus === "content"
-      ? `${term.underline}Content${term.reset}${term.inverse}${term.bold}`
-      : "Content";
-  const headerText = ` ${folderLabel} → ${noteLabel} → ${contentLabel} `;
-  const headerVis = visibleLength(headerText);
-  buf += `${term.inverse}${term.bold}${headerText}${" ".repeat(Math.max(0, tc - headerVis))}${term.reset}`;
-
-  // Body rows
-  for (let row = 0; row < br; row++) {
-    buf += moveTo(row + 2, 0);
-
-    // Folder panel
-    const treeIdx = row + ns.treeScroll;
-    if (treeIdx < ns.tree.length) {
-      const item = ns.tree[treeIdx] as TreeItem;
-      const isSelected = treeIdx === ns.treeIndex;
-      const isFocused = ns.focus === "folders";
-
-      let line: string;
-      if (item.isAccount) {
-        line = `${term.bold}${term.fg.yellow} ${item.label}${term.reset}`;
-      } else {
-        const indent = "  ".repeat(item.indent);
-        const icon = item.folder === null ? "◆" : "▸";
-        line = `${indent} ${icon} ${item.label}`;
-      }
-
-      if (isSelected && isFocused) {
-        buf += `${term.inverse}${term.bold}${pad(line, fw)}${term.reset}`;
-      } else if (isSelected) {
-        buf += `${term.bold}${pad(line, fw)}${term.reset}`;
-      } else {
-        buf += pad(line, fw);
-      }
-    } else {
-      buf += " ".repeat(fw);
-    }
-
-    buf += `${term.dim}│${term.reset}`;
-
-    // Note list panel
-    const noteIdx = row + ns.noteScroll;
-    if (noteIdx < ns.notes.length) {
-      const note = ns.notes[noteIdx] as NoteMeta;
-      const isSelected = noteIdx === ns.noteIndex;
-      const isFocused = ns.focus === "notes";
-
-      const date = note.modifiedAt.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
-      const datePart = `${term.dim}${date}${term.reset}`;
-      const dateVis = date.length;
-      const titleSpace = nw - dateVis - 3;
-      const t = truncate(note.title, Math.max(5, titleSpace));
-      const gap = nw - visibleLength(t) - dateVis - 2;
-      const line = ` ${t}${" ".repeat(Math.max(1, gap))}${datePart}`;
-
-      if (isSelected && isFocused) {
-        buf += `${term.inverse}${term.bold}${pad(line, nw)}${term.reset}`;
-      } else if (isSelected) {
-        buf += `${term.bold}${pad(line, nw)}${term.reset}`;
-      } else {
-        buf += pad(line, nw);
-      }
-    } else {
-      buf += " ".repeat(nw);
-    }
-
-    buf += `${term.dim}│${term.reset}`;
-
-    // Content panel
-    const contentIdx = row + ns.contentScroll;
-    if (contentIdx >= 0 && contentIdx < ns.contentLines.length) {
-      const line = ns.contentLines[contentIdx] as string;
-      buf += ` ${truncate(line, cw - 1)}`;
-    }
-  }
-
-  return buf;
-}
-
-function drawMessagesTab(): string {
-  const ms = state.messagesState;
-  const tc = totalCols();
-  const cpw = chatPanelWidth();
-  const mpw = messagePanelWidth();
-  const br = bodyRows();
-
-  let buf = "";
-
-  // Header
-  const chatsLabel =
-    ms.focus === "chats"
-      ? `${term.underline}Chats${term.reset}${term.inverse}${term.bold}`
-      : "Chats";
-  const msgsLabel =
-    ms.focus === "messages"
-      ? `${term.underline}Messages${term.reset}${term.inverse}${term.bold}`
-      : "Messages";
-
-  const chatInfo = ms.chats[ms.chatIndex];
-  const chatName = chatInfo
-    ? ` — ${chatInfo.displayName}${chatInfo.isGroup ? " (group)" : ""}`
-    : "";
-
-  const headerText = ` ${chatsLabel} → ${msgsLabel}${term.dim}${chatName}${term.reset}${term.inverse}${term.bold} `;
-  const headerVis = visibleLength(headerText);
-  buf += `${term.inverse}${term.bold}${headerText}${" ".repeat(Math.max(0, tc - headerVis))}${term.reset}`;
-
-  // Body rows
-  for (let row = 0; row < br; row++) {
-    buf += moveTo(row + 2, 0);
-
-    // Chat list panel
-    const chatIdx = row + ms.chatScroll;
-    if (chatIdx < ms.chats.length) {
-      const chat = ms.chats[chatIdx] as Chat;
-      const isSelected = chatIdx === ms.chatIndex;
-      const isFocused = ms.focus === "chats";
-
-      const date = chat.lastMessageDate.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
-      const groupIcon = chat.isGroup ? "👥" : "💬";
-      const nameSpace = cpw - date.length - 5;
-      const name = truncate(chat.displayName, Math.max(5, nameSpace));
-      const gap = cpw - visibleLength(name) - date.length - 4;
-      const line = ` ${groupIcon} ${name}${" ".repeat(Math.max(1, gap))}${term.dim}${date}${term.reset}`;
-
-      if (isSelected && isFocused) {
-        buf += `${term.inverse}${term.bold}${pad(line, cpw)}${term.reset}`;
-      } else if (isSelected) {
-        buf += `${term.bold}${pad(line, cpw)}${term.reset}`;
-      } else {
-        buf += pad(line, cpw);
-      }
-    } else {
-      buf += " ".repeat(cpw);
-    }
-
-    buf += `${term.dim}│${term.reset}`;
-
-    // Messages panel — each message takes 2 visual rows
-    const msgIdx = Math.floor((row + ms.messageScroll) / 2);
-    const subRow = (row + ms.messageScroll) % 2;
-
-    if (msgIdx >= 0 && msgIdx < ms.messages.length) {
-      const msg = ms.messages[msgIdx] as MessageMeta;
-      const { line1, line2 } = formatMessageLine(msg, mpw);
-      const isFocused = ms.focus === "messages";
-
-      if (subRow === 0) {
-        buf += isFocused ? line1 : `${term.dim}${line1}${term.reset}`;
-      } else {
-        buf += line2;
-      }
-    }
-  }
-
-  return buf;
-}
-
-function drawContactsTab(): string {
-  const cs = state.contactsState;
-  const tc = totalCols();
-  const gw = groupPanelWidth();
-  const clw = contactListPanelWidth();
-  const dw = contactDetailPanelWidth();
-  const br = bodyRows();
-
-  let buf = "";
-
-  // Header
-  const groupsLabel =
-    cs.focus === "groups"
-      ? `${term.underline}Groups${term.reset}${term.inverse}${term.bold}`
-      : "Groups";
-  const contactsLabel =
-    cs.focus === "contacts"
-      ? `${term.underline}Contacts${term.reset}${term.inverse}${term.bold}`
-      : "Contacts";
-  const detailsLabel =
-    cs.focus === "details"
-      ? `${term.underline}Details${term.reset}${term.inverse}${term.bold}`
-      : "Details";
-  const headerText = ` ${groupsLabel} → ${contactsLabel} → ${detailsLabel} `;
-  const headerVis = visibleLength(headerText);
-  buf += `${term.inverse}${term.bold}${headerText}${" ".repeat(Math.max(0, tc - headerVis))}${term.reset}`;
-
-  // Body rows
-  for (let row = 0; row < br; row++) {
-    buf += moveTo(row + 2, 0);
-
-    // Groups panel
-    const groupIdx = row + cs.groupScroll;
-    // groupIdx 0 = "All Contacts", 1..N = actual groups
-    const totalGroupItems = cs.groups.length + 1;
-    if (groupIdx < totalGroupItems) {
-      const isSelected = groupIdx === cs.groupIndex;
-      const isFocused = cs.focus === "groups";
-
-      let line: string;
-      if (groupIdx === 0) {
-        line = ` ◆ All Contacts (${cs.allContacts.length})`;
-      } else {
-        const group = cs.groups[groupIdx - 1] as Group;
-        line = ` ▸ ${group.name} (${group.memberCount})`;
-      }
-
-      if (isSelected && isFocused) {
-        buf += `${term.inverse}${term.bold}${pad(line, gw)}${term.reset}`;
-      } else if (isSelected) {
-        buf += `${term.bold}${pad(line, gw)}${term.reset}`;
-      } else {
-        buf += pad(line, gw);
-      }
-    } else {
-      buf += " ".repeat(gw);
-    }
-
-    buf += `${term.dim}│${term.reset}`;
-
-    // Contact list panel
-    const contactIdx = row + cs.contactScroll;
-    if (contactIdx < cs.contacts.length) {
-      const contact = cs.contacts[contactIdx] as Contact;
-      const isSelected = contactIdx === cs.contactIndex;
-      const isFocused = cs.focus === "contacts";
-
-      const orgSuffix = contact.organization
-        ? `${term.dim} · ${contact.organization}${term.reset}`
-        : "";
-      const nameText = truncate(contact.displayName, Math.max(5, clw - 2));
-      const line = ` ${nameText}${orgSuffix}`;
-
-      if (isSelected && isFocused) {
-        buf += `${term.inverse}${term.bold}${pad(line, clw)}${term.reset}`;
-      } else if (isSelected) {
-        buf += `${term.bold}${pad(line, clw)}${term.reset}`;
-      } else {
-        buf += pad(line, clw);
-      }
-    } else {
-      buf += " ".repeat(clw);
-    }
-
-    buf += `${term.dim}│${term.reset}`;
-
-    // Details panel
-    const detailIdx = row + cs.detailScroll;
-    if (detailIdx >= 0 && detailIdx < cs.detailLines.length) {
-      const line = cs.detailLines[detailIdx] as string;
-      buf += ` ${truncate(line, dw - 1)}`;
-    }
-  }
-
-  return buf;
-}
-
 function draw() {
   const tc = totalCols();
   const tr = totalRows();
@@ -1018,14 +121,14 @@ function draw() {
   // Tab bar
   buf += drawTabBar();
 
-  // Tab-specific header + body (starts at row 1)
+  // Tab-specific header + body
   buf += moveTo(1, 0);
   if (state.tab === "notes") {
-    buf += drawNotesTab();
+    buf += drawNotesTab(state);
   } else if (state.tab === "messages") {
-    buf += drawMessagesTab();
+    buf += drawMessagesTab(state);
   } else {
-    buf += drawContactsTab();
+    buf += drawContactsTab(state);
   }
 
   // Footer bar
@@ -1035,75 +138,26 @@ function draw() {
     footer = ` /${state.searchQuery}█  ${term.dim}Enter=search  Esc=cancel${term.reset}`;
   } else if (state.statusMessage) {
     footer = ` ${state.statusMessage}`;
-  } else if (state.tab === "notes") {
-    footer = ` ${term.dim}1/2/3${term.reset} tabs  ${term.dim}←→${term.reset} panels  ${term.dim}↑↓${term.reset} navigate  ${term.dim}j/k${term.reset} scroll  ${term.dim}o${term.reset} open  ${term.dim}/${term.reset} search  ${term.dim}q${term.reset} quit`;
-  } else if (state.tab === "messages") {
-    footer = ` ${term.dim}1/2/3${term.reset} tabs  ${term.dim}←→${term.reset} panels  ${term.dim}↑↓${term.reset} navigate  ${term.dim}j/k${term.reset} scroll  ${term.dim}/${term.reset} search  ${term.dim}q${term.reset} quit`;
   } else {
-    footer = ` ${term.dim}1/2/3${term.reset} tabs  ${term.dim}←→${term.reset} panels  ${term.dim}↑↓${term.reset} navigate  ${term.dim}j/k${term.reset} scroll  ${term.dim}/${term.reset} search  ${term.dim}q${term.reset} quit`;
+    footer = buildFooter(state.tab);
   }
   buf += `${term.inverse}${pad(footer, tc)}${term.reset}`;
 
   write(buf);
 }
 
-// ── Input handling ───────────────────────────────────────────────────────────
-
-function doNotesSearch() {
-  const query = state.searchQuery.trim();
-  state.searchMode = false;
-  if (!query) {
-    loadNotesForFolder();
-    state.statusMessage = "";
-    return;
-  }
-  state.notesState.notes = notesDb.search(query);
-  state.statusMessage = `${state.notesState.notes.length} result${state.notesState.notes.length === 1 ? "" : "s"} for "${query}"`;
-  state.notesState.noteIndex = 0;
-  state.notesState.noteScroll = 0;
-  loadSelectedNote();
-}
-
-function doMessagesSearch() {
-  const query = state.searchQuery.trim();
-  state.searchMode = false;
-  if (!query) {
-    loadChats();
-    state.statusMessage = "";
-    return;
-  }
-  state.messagesState.chats = messagesDb.chats({ search: query });
-  state.statusMessage = `${state.messagesState.chats.length} chat${state.messagesState.chats.length === 1 ? "" : "s"} matching "${query}"`;
-  state.messagesState.chatIndex = 0;
-  state.messagesState.chatScroll = 0;
-  loadSelectedChat();
-}
-
-function doContactsSearch() {
-  const query = state.searchQuery.trim();
-  state.searchMode = false;
-  if (!query) {
-    loadContactsForGroup();
-    state.statusMessage = "";
-    return;
-  }
-  state.contactsState.contacts = contactsDb.search(query);
-  state.statusMessage = `${state.contactsState.contacts.length} contact${state.contactsState.contacts.length === 1 ? "" : "s"} matching "${query}"`;
-  state.contactsState.contactIndex = 0;
-  state.contactsState.contactScroll = 0;
-  loadSelectedContact();
-}
+// ── Input handling ──────────────────────────────────────────────────────────
 
 function clearSearch() {
   state.searchMode = false;
   state.searchQuery = "";
   state.statusMessage = "";
   if (state.tab === "notes") {
-    loadNotesForFolder();
+    loadNotesForFolder(state, notesDb);
   } else if (state.tab === "messages") {
-    loadChats();
+    loadChats(state, messagesDb);
   } else {
-    loadContactsForGroup();
+    loadContactsForGroup(state, contactsDb);
   }
 }
 
@@ -1113,199 +167,6 @@ function cleanup() {
   notesDb.close();
   messagesDb.close();
   contactsDb.close();
-}
-
-function handleNotesInput(s: string) {
-  const ns = state.notesState;
-  const maxContentScroll = Math.max(0, ns.contentLines.length - bodyRows());
-
-  switch (s) {
-    // Left/right — switch panels
-    case "\x1b[D": // Left arrow
-      if (ns.focus === "content") ns.focus = "notes";
-      else if (ns.focus === "notes") ns.focus = "folders";
-      break;
-    case "\x1b[C": // Right arrow
-      if (ns.focus === "folders") ns.focus = "notes";
-      else if (ns.focus === "notes") ns.focus = "content";
-      break;
-
-    // Up/down
-    case "\x1b[A": // Up
-      if (ns.focus === "folders") selectTreeItem(ns.treeIndex - 1);
-      else if (ns.focus === "notes") selectNote(ns.noteIndex - 1);
-      else ns.contentScroll = Math.max(0, ns.contentScroll - 1);
-      break;
-    case "\x1b[B": // Down
-      if (ns.focus === "folders") selectTreeItem(ns.treeIndex + 1);
-      else if (ns.focus === "notes") selectNote(ns.noteIndex + 1);
-      else ns.contentScroll = Math.min(maxContentScroll, ns.contentScroll + 1);
-      break;
-    case "\x1b[5~": // Page Up
-      if (ns.focus === "folders") selectTreeItem(ns.treeIndex - bodyRows());
-      else if (ns.focus === "notes") selectNote(ns.noteIndex - bodyRows());
-      else ns.contentScroll = Math.max(0, ns.contentScroll - bodyRows());
-      break;
-    case "\x1b[6~": // Page Down
-      if (ns.focus === "folders") selectTreeItem(ns.treeIndex + bodyRows());
-      else if (ns.focus === "notes") selectNote(ns.noteIndex + bodyRows());
-      else
-        ns.contentScroll = Math.min(
-          maxContentScroll,
-          ns.contentScroll + bodyRows(),
-        );
-      break;
-
-    // j/k — always scroll content
-    case "k":
-      ns.contentScroll = Math.max(0, ns.contentScroll - 1);
-      break;
-    case "K":
-      ns.contentScroll = Math.max(0, ns.contentScroll - bodyRows());
-      break;
-    case "j":
-      ns.contentScroll = Math.min(maxContentScroll, ns.contentScroll + 1);
-      break;
-    case "J":
-      ns.contentScroll = Math.min(
-        maxContentScroll,
-        ns.contentScroll + bodyRows(),
-      );
-      break;
-
-    case "o": {
-      const urls: string[] = [];
-      for (const a of ns.attachments) {
-        if (a.url) urls.push(a.url);
-      }
-      if (ns.rawMarkdown) {
-        const inlineRe = /!\[.*?\]\(attachment:([^?)]+)/g;
-        for (const match of ns.rawMarkdown.matchAll(inlineRe)) {
-          const id = match[1] as string;
-          const url = notesDb.getAttachmentUrl(id);
-          if (url && !urls.includes(url)) urls.push(url);
-        }
-      }
-      if (urls.length > 0) {
-        for (const url of urls) Bun.spawn(["open", url]);
-        state.statusMessage = `Opened ${urls.length} attachment${urls.length === 1 ? "" : "s"}`;
-      } else {
-        state.statusMessage = "No attachments to open";
-      }
-      break;
-    }
-  }
-}
-
-function handleMessagesInput(s: string) {
-  const ms = state.messagesState;
-  // Each message takes 2 visual rows
-  const maxMsgScroll = Math.max(0, ms.messages.length * 2 - bodyRows());
-
-  switch (s) {
-    // Left/right — switch panels
-    case "\x1b[D": // Left arrow
-      if (ms.focus === "messages") ms.focus = "chats";
-      break;
-    case "\x1b[C": // Right arrow
-      if (ms.focus === "chats") ms.focus = "messages";
-      break;
-
-    // Up/down
-    case "\x1b[A": // Up
-      if (ms.focus === "chats") selectChat(ms.chatIndex - 1);
-      else ms.messageScroll = Math.max(0, ms.messageScroll - 1);
-      break;
-    case "\x1b[B": // Down
-      if (ms.focus === "chats") selectChat(ms.chatIndex + 1);
-      else ms.messageScroll = Math.min(maxMsgScroll, ms.messageScroll + 1);
-      break;
-    case "\x1b[5~": // Page Up
-      if (ms.focus === "chats") selectChat(ms.chatIndex - bodyRows());
-      else ms.messageScroll = Math.max(0, ms.messageScroll - bodyRows());
-      break;
-    case "\x1b[6~": // Page Down
-      if (ms.focus === "chats") selectChat(ms.chatIndex + bodyRows());
-      else
-        ms.messageScroll = Math.min(
-          maxMsgScroll,
-          ms.messageScroll + bodyRows(),
-        );
-      break;
-
-    // j/k — always scroll messages
-    case "k":
-      ms.messageScroll = Math.max(0, ms.messageScroll - 1);
-      break;
-    case "K":
-      ms.messageScroll = Math.max(0, ms.messageScroll - bodyRows());
-      break;
-    case "j":
-      ms.messageScroll = Math.min(maxMsgScroll, ms.messageScroll + 1);
-      break;
-    case "J":
-      ms.messageScroll = Math.min(maxMsgScroll, ms.messageScroll + bodyRows());
-      break;
-  }
-}
-
-function handleContactsInput(s: string) {
-  const cs = state.contactsState;
-  const maxDetailScroll = Math.max(0, cs.detailLines.length - bodyRows());
-
-  switch (s) {
-    // Left/right — switch panels
-    case "\x1b[D": // Left arrow
-      if (cs.focus === "details") cs.focus = "contacts";
-      else if (cs.focus === "contacts") cs.focus = "groups";
-      break;
-    case "\x1b[C": // Right arrow
-      if (cs.focus === "groups") cs.focus = "contacts";
-      else if (cs.focus === "contacts") cs.focus = "details";
-      break;
-
-    // Up/down
-    case "\x1b[A": // Up
-      if (cs.focus === "groups") selectGroup(cs.groupIndex - 1);
-      else if (cs.focus === "contacts") selectContact(cs.contactIndex - 1);
-      else cs.detailScroll = Math.max(0, cs.detailScroll - 1);
-      break;
-    case "\x1b[B": // Down
-      if (cs.focus === "groups") selectGroup(cs.groupIndex + 1);
-      else if (cs.focus === "contacts") selectContact(cs.contactIndex + 1);
-      else cs.detailScroll = Math.min(maxDetailScroll, cs.detailScroll + 1);
-      break;
-    case "\x1b[5~": // Page Up
-      if (cs.focus === "groups") selectGroup(cs.groupIndex - bodyRows());
-      else if (cs.focus === "contacts")
-        selectContact(cs.contactIndex - bodyRows());
-      else cs.detailScroll = Math.max(0, cs.detailScroll - bodyRows());
-      break;
-    case "\x1b[6~": // Page Down
-      if (cs.focus === "groups") selectGroup(cs.groupIndex + bodyRows());
-      else if (cs.focus === "contacts")
-        selectContact(cs.contactIndex + bodyRows());
-      else
-        cs.detailScroll = Math.min(
-          maxDetailScroll,
-          cs.detailScroll + bodyRows(),
-        );
-      break;
-
-    // j/k — always scroll details
-    case "k":
-      cs.detailScroll = Math.max(0, cs.detailScroll - 1);
-      break;
-    case "K":
-      cs.detailScroll = Math.max(0, cs.detailScroll - bodyRows());
-      break;
-    case "j":
-      cs.detailScroll = Math.min(maxDetailScroll, cs.detailScroll + 1);
-      break;
-    case "J":
-      cs.detailScroll = Math.min(maxDetailScroll, cs.detailScroll + bodyRows());
-      break;
-  }
 }
 
 function handleInput(data: Buffer) {
@@ -1320,9 +181,9 @@ function handleInput(data: Buffer) {
     if (s === "\x1b") {
       clearSearch();
     } else if (s === "\r" || s === "\n") {
-      if (state.tab === "notes") doNotesSearch();
-      else if (state.tab === "messages") doMessagesSearch();
-      else doContactsSearch();
+      if (state.tab === "notes") doNotesSearch(state, notesDb);
+      else if (state.tab === "messages") doMessagesSearch(state, messagesDb);
+      else doContactsSearch(state, contactsDb);
     } else if (s === "\x7f" || s === "\b") {
       state.searchQuery = state.searchQuery.slice(0, -1);
     } else if (s.length === 1 && s >= " ") {
@@ -1349,7 +210,8 @@ function handleInput(data: Buffer) {
       if (state.tab !== "messages") {
         state.tab = "messages";
         state.statusMessage = "";
-        if (state.messagesState.chats.length === 0) loadChats();
+        if (state.messagesState.chats.length === 0)
+          loadChats(state, messagesDb);
       }
       draw();
       return;
@@ -1360,7 +222,7 @@ function handleInput(data: Buffer) {
         if (state.contactsState.allContacts.length === 0) {
           state.contactsState.allContacts = contactsDb.contacts();
           state.contactsState.groups = contactsDb.groups();
-          selectGroup(0);
+          selectGroup(state, contactsDb, 0);
         }
       }
       draw();
@@ -1378,53 +240,35 @@ function handleInput(data: Buffer) {
 
   // Tab-specific keys
   if (state.tab === "notes") {
-    handleNotesInput(s);
+    handleNotesInput(state, notesDb, s);
   } else if (state.tab === "messages") {
-    handleMessagesInput(s);
+    handleMessagesInput(state, messagesDb, s);
   } else {
-    handleContactsInput(s);
+    handleContactsInput(state, contactsDb, s);
   }
 
   draw();
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// ── Main ────────────────────────────────────────────────────────────────────
 
-try {
-  notesDb = new Notes();
-} catch (error) {
-  if (error instanceof DatabaseAccessDeniedError) {
-    console.error(error.message);
-    console.error("\nOpening Full Disk Access settings...");
-    error.openSettings();
-    process.exit(1);
+function initDb<T>(DbClass: new () => T): T {
+  try {
+    return new DbClass();
+  } catch (error) {
+    if (error instanceof DatabaseAccessDeniedError) {
+      console.error(error.message);
+      console.error("\nOpening Full Disk Access settings...");
+      error.openSettings();
+      process.exit(1);
+    }
+    throw error;
   }
-  throw error;
 }
 
-try {
-  messagesDb = new Messages();
-} catch (error) {
-  if (error instanceof DatabaseAccessDeniedError) {
-    console.error(error.message);
-    console.error("\nOpening Full Disk Access settings...");
-    error.openSettings();
-    process.exit(1);
-  }
-  throw error;
-}
-
-try {
-  contactsDb = new Contacts();
-} catch (error) {
-  if (error instanceof DatabaseAccessDeniedError) {
-    console.error(error.message);
-    console.error("\nOpening Full Disk Access settings...");
-    error.openSettings();
-    process.exit(1);
-  }
-  throw error;
-}
+notesDb = initDb(Notes);
+messagesDb = initDb(Messages);
+contactsDb = initDb(Contacts);
 
 state.notesState.allNotes = notesDb.notes();
 state.notesState.tree = buildFolderTree(notesDb);
@@ -1437,5 +281,5 @@ process.stdin.on("data", handleInput);
 process.stdout.on("resize", draw);
 
 // Select "All Notes" and load
-selectTreeItem(0);
+selectTreeItem(state, notesDb, 0);
 draw();
