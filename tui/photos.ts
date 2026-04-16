@@ -3,6 +3,7 @@ import {
   type AppState,
   bodyRows,
   highlightLine,
+  hyperlink,
   moveTo,
   photoAlbumPanelWidth,
   photoDetailPanelWidth,
@@ -90,6 +91,10 @@ function loadSelectedPhoto(state: AppState, photosDb: Photos) {
       const sec = Math.floor(details.duration % 60);
       lines.push(`  Duration: ${min}:${sec.toString().padStart(2, "0")}`);
     }
+    const photoUrl = photosDb.getPhotoUrl(photo.id);
+    const filePath = photoUrl.url.replace("file://", "");
+    const displayPath = truncate(filePath, w - 8);
+    lines.push(`  Path: ${hyperlink(photoUrl.url, displayPath)}`);
     lines.push("");
 
     // Flags
@@ -287,6 +292,28 @@ export function handlePhotosInput(
     case "K":
       ps.detailScroll = Math.max(0, ps.detailScroll - bodyRows());
       break;
+    case "\r":
+    case "o": {
+      const photo = ps.photos[ps.photoIndex];
+      if (!photo) {
+        state.statusMessage = "No photo selected";
+        break;
+      }
+      try {
+        const photoUrl = photosDb.getPhotoUrl(photo.id);
+        if (!photoUrl.locallyAvailable) {
+          state.statusMessage =
+            "Photo is in iCloud only — not available locally";
+          break;
+        }
+        const filePath = photoUrl.url.replace("file://", "");
+        Bun.spawn(["open", filePath]);
+        state.statusMessage = `Opened: ${photo.filename}`;
+      } catch {
+        state.statusMessage = "Could not open photo";
+      }
+      break;
+    }
   }
 }
 

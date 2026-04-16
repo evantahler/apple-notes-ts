@@ -297,6 +297,9 @@ export function handleScrollKeys(
  */
 export function buildFooter(tab: Tab): string {
   const base = `${term.dim}1/2/3/4${term.reset} tabs  ${term.dim}\u2190\u2192${term.reset} panels  ${term.dim}\u2191\u2193${term.reset} navigate  ${term.dim}j/k${term.reset} scroll`;
-  const open = tab === "notes" ? `  ${term.dim}o${term.reset} open` : "";
+  const open =
+    tab === "notes" || tab === "photos"
+      ? `  ${term.dim}o${term.reset} open`
+      : "";
   return ` ${base}${open}  ${term.dim}/${term.reset} search  ${term.dim}q${term.reset} quit`;
 }
