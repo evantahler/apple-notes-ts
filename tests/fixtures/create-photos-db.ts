@@ -6,17 +6,24 @@
  */
 
 import { Database } from "bun:sqlite";
-import { resolve } from "node:path";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import {
   FIXTURE_DIR,
   cleanupDatabase,
   dateToMacTime as toMacTime,
 } from "./helpers.ts";
 
-const DB_PATH = resolve(FIXTURE_DIR, "Photos.sqlite");
+// Mirror a real .photoslibrary package layout so dirname(dirname(dbPath))
+// resolves to the library root and originals/<bucket>/<filename> works.
+const LIBRARY_DIR = resolve(FIXTURE_DIR, "photos-library");
+const DB_PATH = resolve(LIBRARY_DIR, "database/Photos.sqlite");
+const ORIGINALS_DIR = resolve(LIBRARY_DIR, "originals");
 
-// Delete existing DB
+// Delete existing DB and originals tree
 cleanupDatabase(DB_PATH);
+rmSync(ORIGINALS_DIR, { recursive: true, force: true });
+mkdirSync(dirname(DB_PATH), { recursive: true });
 
 const db = new Database(DB_PATH);
 
@@ -158,6 +165,10 @@ function insertAsset(opts: {
   title?: string;
   fileSize?: number;
   locallyAvailable?: boolean;
+  // When true, ZLOCALAVAILABILITY is set to 1 in the DB but the on-disk
+  // placeholder file is *not* created. Simulates Apple's stale-metadata case
+  // where Optimize Storage purged the file without flipping the flag.
+  skipPlaceholder?: boolean;
 }): number {
   const pk = ++assetPk;
   const uuid = `photo-uuid-${pk}`;
@@ -222,6 +233,20 @@ function insertAsset(opts: {
        (Z_PK, ZASSET, ZRESOURCETYPE, ZDATASTORESUBTYPE, ZLOCALAVAILABILITY)
        VALUES (?, ?, 0, 1, ?)`,
     ).run(++resPk, pk, masterAvailability === 1 ? -1 : 1);
+  }
+
+  // Create a 0-byte placeholder at the originals path the production code
+  // constructs (originals/<bucket>/<filename>) so existsSync() resolves true.
+  // Skip for iCloud-only assets and for the stale-metadata case.
+  if (
+    !opts.trashed &&
+    masterAvailability === 1 &&
+    opts.skipPlaceholder !== true
+  ) {
+    const bucket = dir.charAt(0);
+    const bucketDir = resolve(ORIGINALS_DIR, bucket);
+    mkdirSync(bucketDir, { recursive: true });
+    writeFileSync(resolve(bucketDir, opts.filename), "");
   }
 
   return pk;
@@ -330,6 +355,20 @@ insertAsset({
   locallyAvailable: false,
 });
 
+// --- Photo 9: Stale metadata — ZLOCALAVAILABILITY=1 but file is missing ---
+// Simulates Apple's "Optimize Mac Storage" purging a file without flipping
+// the flag (issue #35). API must report locallyAvailable=false.
+insertAsset({
+  filename: "IMG_STALE.JPG",
+  width: 4032,
+  height: 3024,
+  dateCreated: lastMonth,
+  originalFilename: "IMG_STALE.JPG",
+  title: "Stale (purged but DB says local)",
+  fileSize: 4200000,
+  skipPlaceholder: true,
+});
+
 // ============================================================================
 // Albums
 // ============================================================================
@@ -395,7 +434,10 @@ insertAlbum({
 
 db.close();
 console.log(`Created test Photos database at ${DB_PATH}`);
+console.log(`Originals placeholders at ${ORIGINALS_DIR}`);
 console.log(`Assets created: ${assetPk} (including 1 trashed)`);
 console.log(`Albums created: ${albumPk}`);
-console.log("Photos: sunset (fav+gps), portrait, video, screenshot (hidden), iCloud-only, NYC (fav+gps), trashed, iCloud-only video");
+console.log(
+  "Photos: sunset (fav+gps), portrait, video, screenshot (hidden), iCloud-only, NYC (fav+gps), trashed, iCloud-only video, stale-metadata",
+);
 console.log("Albums: Vacation 2025, Best Shots (smart), To Sort (empty)");

@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type {
   Album,
@@ -158,17 +159,45 @@ export class PhotoReader {
     return results;
   }
 
+  // ZLOCALAVAILABILITY is a hint, not a guarantee — Apple's "Optimize Mac
+  // Storage" purges files without flipping the flag, and edited/shared assets
+  // can store the locally-resident copy at a different ZDATASTORESUBTYPE or
+  // outside originals/. Treat the filesystem as ground truth: only report
+  // locallyAvailable=true when the constructed path actually exists.
+  private resolvePhotoLocation(
+    photoId: number,
+  ): { filePath: string; locallyAvailable: boolean } | null {
+    const row = this.db
+      .query(
+        "SELECT ZDIRECTORY as directory, ZFILENAME as filename FROM ZASSET WHERE Z_PK = ? AND ZTRASHEDSTATE = 0",
+      )
+      .get(photoId) as {
+      directory: string | null;
+      filename: string | null;
+    } | null;
+    if (!row?.filename) return null;
+
+    const dir = row.directory ?? "0";
+    const bucket = dir.charAt(0);
+    const filePath = join(this.libraryPath, "originals", bucket, row.filename);
+
+    const resourceRow = this.db
+      .query(Q.CHECK_LOCAL_AVAILABILITY)
+      .get(photoId) as { localAvailability: number } | null;
+    const dbAvailable = resourceRow?.localAvailability === 1;
+    const locallyAvailable = dbAvailable && existsSync(filePath);
+
+    return { filePath, locallyAvailable };
+  }
+
   getPhoto(photoId: number): PhotoDetails | null {
     const row = this.db
       .query(Q.GET_PHOTO)
       .get(photoId) as PhotoDetailRow | null;
     if (!row) return null;
 
-    // Check local availability
-    const resourceRow = this.db
-      .query(Q.CHECK_LOCAL_AVAILABILITY)
-      .get(photoId) as { localAvailability: number } | null;
-    const locallyAvailable = resourceRow?.localAvailability === 1;
+    const location = this.resolvePhotoLocation(photoId);
+    const locallyAvailable = location?.locallyAvailable ?? false;
 
     const meta = this.rowToPhotoMeta(row);
     return {
@@ -187,30 +216,12 @@ export class PhotoReader {
   getPhotoUrl(
     photoId: number,
   ): { url: string; locallyAvailable: boolean } | null {
-    const row = this.db
-      .query(
-        "SELECT ZDIRECTORY as directory, ZFILENAME as filename FROM ZASSET WHERE Z_PK = ? AND ZTRASHEDSTATE = 0",
-      )
-      .get(photoId) as {
-      directory: string | null;
-      filename: string | null;
-    } | null;
-    if (!row?.filename) return null;
-
-    // Originals are stored at <library>/originals/<first-char-of-directory>/<filename>
-    // When directory is "0" or a UUID-based path, first char is the bucket
-    const dir = row.directory ?? "0";
-    const bucket = dir.charAt(0);
-    const filePath = join(this.libraryPath, "originals", bucket, row.filename);
-
-    const resourceRow = this.db
-      .query(Q.CHECK_LOCAL_AVAILABILITY)
-      .get(photoId) as { localAvailability: number } | null;
-    const locallyAvailable = resourceRow?.localAvailability === 1;
+    const location = this.resolvePhotoLocation(photoId);
+    if (!location) return null;
 
     return {
-      url: `file://${filePath}`,
-      locallyAvailable,
+      url: `file://${location.filePath}`,
+      locallyAvailable: location.locallyAvailable,
     };
   }
 

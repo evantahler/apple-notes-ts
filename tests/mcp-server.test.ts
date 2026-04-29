@@ -11,7 +11,10 @@ const CONTACTS_FIXTURE_DB = resolve(
   import.meta.dir,
   "fixtures/AddressBook-v22.abcddb",
 );
-const PHOTOS_FIXTURE_DB = resolve(import.meta.dir, "fixtures/Photos.sqlite");
+const PHOTOS_FIXTURE_DB = resolve(
+  import.meta.dir,
+  "fixtures/photos-library/database/Photos.sqlite",
+);
 
 let client: Client;
 let cleanup: () => void;

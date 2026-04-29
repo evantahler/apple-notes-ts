@@ -6,7 +6,10 @@ import {
   PhotoNotFoundError,
 } from "../src/photos/errors.ts";
 
-const FIXTURE_DB = resolve(import.meta.dir, "fixtures/Photos.sqlite");
+const FIXTURE_DB = resolve(
+  import.meta.dir,
+  "fixtures/photos-library/database/Photos.sqlite",
+);
 
 function idOf<T extends { id: number }>(item: T | undefined): number {
   if (!item) throw new Error("Expected item to be defined");
@@ -30,8 +33,8 @@ afterAll(() => {
 describe("photos", () => {
   test("returns all visible non-hidden photos by default", () => {
     const photos = db.photos();
-    // 8 total - 1 trashed - 1 hidden = 6
-    expect(photos).toHaveLength(6);
+    // 9 total - 1 trashed - 1 hidden = 7
+    expect(photos).toHaveLength(7);
   });
 
   test("excludes trashed photos", () => {
@@ -189,6 +192,18 @@ describe("getPhoto", () => {
     expect(details.locallyAvailable).toBe(false);
   });
 
+  test("stale metadata: DB flag=1 but file missing → locallyAvailable=false", () => {
+    // Issue #35: Apple's "Optimize Mac Storage" can purge a file without
+    // flipping ZLOCALAVAILABILITY. The fixture inserts ZLOCALAVAILABILITY=1
+    // for IMG_STALE.JPG but does not create the placeholder file on disk.
+    const photos = db.photos();
+    const stale = photos.find((p) => p.filename === "IMG_STALE.JPG");
+    expect(stale).toBeDefined();
+
+    const details = db.getPhoto(idOf(stale));
+    expect(details.locallyAvailable).toBe(false);
+  });
+
   test("throws PhotoNotFoundError for missing photo", () => {
     expect(() => db.getPhoto(99999)).toThrow(PhotoNotFoundError);
   });
@@ -235,6 +250,19 @@ describe("getPhotoUrl", () => {
     expect(remote).toBeDefined();
 
     const result = db.getPhotoUrl(idOf(remote));
+    expect(result.locallyAvailable).toBe(false);
+  });
+
+  test("stale metadata: DB flag=1 but file missing → locallyAvailable=false", () => {
+    // Issue #35: ZLOCALAVAILABILITY can lag behind Apple's storage purges.
+    // The library must stat the constructed path and override the flag when
+    // the file is gone.
+    const photos = db.photos();
+    const stale = photos.find((p) => p.filename === "IMG_STALE.JPG");
+    expect(stale).toBeDefined();
+
+    const result = db.getPhotoUrl(idOf(stale));
+    expect(result.url).toContain("originals/0/IMG_STALE.JPG");
     expect(result.locallyAvailable).toBe(false);
   });
 

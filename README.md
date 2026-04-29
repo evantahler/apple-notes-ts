@@ -136,11 +136,15 @@ const inAlbum = db.photos({ albumId: 1 });
 // Get full photo details (dimensions, GPS, file size, iCloud status)
 const details = db.getPhoto(photoId);
 console.log(details.title);             // "Sunset at the Beach"
-console.log(details.locallyAvailable);  // false = iCloud only
+console.log(details.locallyAvailable);  // false = iCloud only or purged
 
 // Get file URL for a photo
 const { url, locallyAvailable } = db.getPhotoUrl(photoId);
 // url: "file:///Users/.../Photos Library.photoslibrary/originals/0/IMG_001.JPG"
+// locallyAvailable is filesystem-verified: true means the Photos.sqlite flag
+// AND the file actually exists at `url`. Apple's "Optimize Mac Storage" can
+// purge files without flipping the flag, so callers can trust this signal
+// without an extra stat() check.
 
 // List albums (user and smart albums)
 const albums = db.albums();
@@ -263,7 +267,7 @@ Errors: `DatabaseNotFoundError`, `ChatNotFoundError`, `MessageNotFoundError`.
 
 Errors: `DatabaseNotFoundError`, `ContactNotFoundError`, `GroupNotFoundError`.
 
-**Photos**: Pass `dbPath` to `new Photos()` to override auto-detection (defaults to `~/Pictures/Photos Library.photoslibrary/database/Photos.sqlite`). The `getPhotoUrl` method resolves the original file path and indicates whether the photo is locally available or iCloud-only.
+**Photos**: Pass `dbPath` to `new Photos()` to override auto-detection (defaults to `~/Pictures/Photos Library.photoslibrary/database/Photos.sqlite`). The `getPhotoUrl` method resolves the original file path and indicates whether the photo is locally available or iCloud-only. `locallyAvailable` is verified against the filesystem — `true` only when the Photos.sqlite flag is set *and* the file is present at the returned URL.
 
 Errors: `DatabaseNotFoundError`, `PhotoNotFoundError`, `AlbumNotFoundError`.
 
