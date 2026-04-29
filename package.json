@@ -1,6 +1,6 @@
 {
   "name": "macos-ts",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "description": "TypeScript package for reading and searching Apple Notes, iMessages, Contacts, and more on macOS via direct SQLite access. Includes markdown conversion, attachment support, and offers a local MCP server!",
   "module": "src/index.ts",
   "main": "src/index.ts",

@@ -33,8 +33,8 @@ afterAll(() => {
 describe("photos", () => {
   test("returns all visible non-hidden photos by default", () => {
     const photos = db.photos();
-    // 9 total - 1 trashed - 1 hidden = 7
-    expect(photos).toHaveLength(7);
+    // 10 total - 1 trashed - 1 hidden = 8
+    expect(photos).toHaveLength(8);
   });
 
   test("excludes trashed photos", () => {
@@ -264,6 +264,21 @@ describe("getPhotoUrl", () => {
     const result = db.getPhotoUrl(idOf(stale));
     expect(result.url).toContain("originals/0/IMG_STALE.JPG");
     expect(result.locallyAvailable).toBe(false);
+  });
+
+  test("syndicated photo (ZBUNDLESCOPE=3) resolves to scopes/syndication/originals", () => {
+    // Issue #40: "Shared with You" assets live under scopes/syndication/
+    // originals/, not the main originals/ tree. The constructed path must
+    // honor ZBUNDLESCOPE so locallyAvailable stays true for these.
+    const photos = db.photos();
+    const syndicated = photos.find((p) => p.filename === "IMG_SYNDICATED.JPG");
+    expect(syndicated).toBeDefined();
+
+    const result = db.getPhotoUrl(idOf(syndicated));
+    expect(result.url).toContain(
+      "scopes/syndication/originals/0/IMG_SYNDICATED.JPG",
+    );
+    expect(result.locallyAvailable).toBe(true);
   });
 
   test("throws PhotoNotFoundError for missing photo", () => {

@@ -169,17 +169,26 @@ export class PhotoReader {
   ): { filePath: string; locallyAvailable: boolean } | null {
     const row = this.db
       .query(
-        "SELECT ZDIRECTORY as directory, ZFILENAME as filename FROM ZASSET WHERE Z_PK = ? AND ZTRASHEDSTATE = 0",
+        "SELECT ZDIRECTORY as directory, ZFILENAME as filename, ZBUNDLESCOPE as bundleScope FROM ZASSET WHERE Z_PK = ? AND ZTRASHEDSTATE = 0",
       )
       .get(photoId) as {
       directory: string | null;
       filename: string | null;
+      bundleScope: number | null;
     } | null;
     if (!row?.filename) return null;
 
     const dir = row.directory ?? "0";
     const bucket = dir.charAt(0);
-    const filePath = join(this.libraryPath, "originals", bucket, row.filename);
+    // ZBUNDLESCOPE=3 marks syndicated / "Shared with You" assets (photos
+    // received via Messages/AirDrop). Their originals live under a separate
+    // scopes/syndication/originals/ tree, not the main originals/ tree.
+    // ZBUNDLESCOPE=1 and 2 are not yet investigated and currently fall through
+    // to originals/ — extend this routing if real libraries surface false
+    // negatives for those scopes.
+    const scopeDir =
+      row.bundleScope === 3 ? "scopes/syndication/originals" : "originals";
+    const filePath = join(this.libraryPath, scopeDir, bucket, row.filename);
 
     const resourceRow = this.db
       .query(Q.CHECK_LOCAL_AVAILABILITY)

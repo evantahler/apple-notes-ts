@@ -19,10 +19,15 @@ import {
 const LIBRARY_DIR = resolve(FIXTURE_DIR, "photos-library");
 const DB_PATH = resolve(LIBRARY_DIR, "database/Photos.sqlite");
 const ORIGINALS_DIR = resolve(LIBRARY_DIR, "originals");
+const SYNDICATION_ORIGINALS_DIR = resolve(
+  LIBRARY_DIR,
+  "scopes/syndication/originals",
+);
 
 // Delete existing DB and originals tree
 cleanupDatabase(DB_PATH);
 rmSync(ORIGINALS_DIR, { recursive: true, force: true });
+rmSync(resolve(LIBRARY_DIR, "scopes"), { recursive: true, force: true });
 mkdirSync(dirname(DB_PATH), { recursive: true });
 
 const db = new Database(DB_PATH);
@@ -60,7 +65,8 @@ db.exec(`
     ZDIRECTORY VARCHAR,
     ZFILENAME VARCHAR,
     ZUNIFORMTYPEIDENTIFIER VARCHAR,
-    ZUUID VARCHAR
+    ZUUID VARCHAR,
+    ZBUNDLESCOPE INTEGER DEFAULT 0
   );
 
   CREATE TABLE ZADDITIONALASSETATTRIBUTES (
@@ -169,6 +175,9 @@ function insertAsset(opts: {
   // placeholder file is *not* created. Simulates Apple's stale-metadata case
   // where Optimize Storage purged the file without flipping the flag.
   skipPlaceholder?: boolean;
+  // ZBUNDLESCOPE: 0=main library (default), 3=syndication ("Shared with You").
+  // Routes the placeholder to scopes/syndication/originals/ when 3.
+  bundleScope?: number;
 }): number {
   const pk = ++assetPk;
   const uuid = `photo-uuid-${pk}`;
@@ -179,8 +188,8 @@ function insertAsset(opts: {
      (Z_PK, Z_ENT, ZKIND, ZWIDTH, ZHEIGHT, ZORIENTATION, ZFAVORITE, ZHIDDEN,
       ZTRASHEDSTATE, ZVISIBILITYSTATE, ZDURATION, ZLATITUDE, ZLONGITUDE,
       ZDATECREATED, ZADDEDDATE, ZMODIFICATIONDATE,
-      ZDIRECTORY, ZFILENAME, ZUNIFORMTYPEIDENTIFIER, ZUUID)
-     VALUES (?, 3, ?, ?, ?, 1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ZDIRECTORY, ZFILENAME, ZUNIFORMTYPEIDENTIFIER, ZUUID, ZBUNDLESCOPE)
+     VALUES (?, 3, ?, ?, ?, 1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     pk,
     opts.kind ?? 0,
@@ -199,6 +208,7 @@ function insertAsset(opts: {
     opts.filename,
     opts.uti ?? "public.jpeg",
     uuid,
+    opts.bundleScope ?? 0,
   );
 
   // Additional attributes
@@ -235,16 +245,19 @@ function insertAsset(opts: {
     ).run(++resPk, pk, masterAvailability === 1 ? -1 : 1);
   }
 
-  // Create a 0-byte placeholder at the originals path the production code
-  // constructs (originals/<bucket>/<filename>) so existsSync() resolves true.
-  // Skip for iCloud-only assets and for the stale-metadata case.
+  // Create a 0-byte placeholder at the path the production code constructs
+  // so existsSync() resolves true. Syndicated assets (ZBUNDLESCOPE=3) live
+  // under scopes/syndication/originals/<bucket>/, everything else under
+  // originals/<bucket>/. Skip for iCloud-only assets and the stale-metadata case.
   if (
     !opts.trashed &&
     masterAvailability === 1 &&
     opts.skipPlaceholder !== true
   ) {
     const bucket = dir.charAt(0);
-    const bucketDir = resolve(ORIGINALS_DIR, bucket);
+    const scopeRoot =
+      opts.bundleScope === 3 ? SYNDICATION_ORIGINALS_DIR : ORIGINALS_DIR;
+    const bucketDir = resolve(scopeRoot, bucket);
     mkdirSync(bucketDir, { recursive: true });
     writeFileSync(resolve(bucketDir, opts.filename), "");
   }
@@ -369,6 +382,21 @@ insertAsset({
   skipPlaceholder: true,
 });
 
+// --- Photo 10: Syndicated ("Shared with You") — ZBUNDLESCOPE=3 ---
+// Issue #40: original lives under scopes/syndication/originals/, not
+// originals/. Verifies path routing honors ZBUNDLESCOPE so locallyAvailable
+// stays true for syndicated assets that are physically on disk.
+insertAsset({
+  filename: "IMG_SYNDICATED.JPG",
+  width: 3024,
+  height: 4032,
+  dateCreated: lastWeek,
+  originalFilename: "IMG_SYNDICATED.JPG",
+  title: "Shared via Messages",
+  fileSize: 1800000,
+  bundleScope: 3,
+});
+
 // ============================================================================
 // Albums
 // ============================================================================
@@ -438,6 +466,6 @@ console.log(`Originals placeholders at ${ORIGINALS_DIR}`);
 console.log(`Assets created: ${assetPk} (including 1 trashed)`);
 console.log(`Albums created: ${albumPk}`);
 console.log(
-  "Photos: sunset (fav+gps), portrait, video, screenshot (hidden), iCloud-only, NYC (fav+gps), trashed, iCloud-only video, stale-metadata",
+  "Photos: sunset (fav+gps), portrait, video, screenshot (hidden), iCloud-only, NYC (fav+gps), trashed, iCloud-only video, stale-metadata, syndicated",
 );
 console.log("Albums: Vacation 2025, Best Shots (smart), To Sort (empty)");
