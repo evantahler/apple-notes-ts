@@ -30,8 +30,8 @@ afterAll(() => {
 describe("photos", () => {
   test("returns all visible non-hidden photos by default", () => {
     const photos = db.photos();
-    // 7 total - 1 trashed - 1 hidden = 5
-    expect(photos).toHaveLength(5);
+    // 8 total - 1 trashed - 1 hidden = 6
+    expect(photos).toHaveLength(6);
   });
 
   test("excludes trashed photos", () => {
@@ -75,7 +75,7 @@ describe("photos", () => {
   test("filters by mediaType=video", () => {
     const photos = db.photos({ mediaType: "video" });
     expect(photos.every((p) => p.mediaType === "video")).toBe(true);
-    expect(photos).toHaveLength(1);
+    expect(photos).toHaveLength(2);
   });
 
   test("filters by favorite=true", () => {
@@ -168,6 +168,27 @@ describe("getPhoto", () => {
     expect(details.locallyAvailable).toBe(false);
   });
 
+  test("video with locally available master stream returns locallyAvailable=true", () => {
+    // The fixture inserts a poster row (ZRESOURCETYPE=0) with availability=-1
+    // for this video, so a passing assertion proves the query selects the
+    // master row (ZRESOURCETYPE=1) rather than the poster.
+    const videos = db.photos({ mediaType: "video" });
+    const local = videos.find((v) => v.filename === "IMG_0003.MOV");
+    expect(local).toBeDefined();
+
+    const details = db.getPhoto(idOf(local));
+    expect(details.locallyAvailable).toBe(true);
+  });
+
+  test("iCloud-only video shows locallyAvailable=false", () => {
+    const videos = db.photos({ mediaType: "video" });
+    const remote = videos.find((v) => v.filename === "IMG_0008.MOV");
+    expect(remote).toBeDefined();
+
+    const details = db.getPhoto(idOf(remote));
+    expect(details.locallyAvailable).toBe(false);
+  });
+
   test("throws PhotoNotFoundError for missing photo", () => {
     expect(() => db.getPhoto(99999)).toThrow(PhotoNotFoundError);
   });
@@ -195,6 +216,25 @@ describe("getPhotoUrl", () => {
     expect(old).toBeDefined();
 
     const result = db.getPhotoUrl(idOf(old));
+    expect(result.locallyAvailable).toBe(false);
+  });
+
+  test("video with locally available master stream has locallyAvailable=true", () => {
+    const videos = db.photos({ mediaType: "video" });
+    const local = videos.find((v) => v.filename === "IMG_0003.MOV");
+    expect(local).toBeDefined();
+
+    const result = db.getPhotoUrl(idOf(local));
+    expect(result.url).toContain("originals/0/IMG_0003.MOV");
+    expect(result.locallyAvailable).toBe(true);
+  });
+
+  test("iCloud-only video has locallyAvailable=false", () => {
+    const videos = db.photos({ mediaType: "video" });
+    const remote = videos.find((v) => v.filename === "IMG_0008.MOV");
+    expect(remote).toBeDefined();
+
+    const result = db.getPhotoUrl(idOf(remote));
     expect(result.locallyAvailable).toBe(false);
   });
 

@@ -47,10 +47,18 @@ export const GET_PHOTO = `
   WHERE a.Z_PK = ? AND ${VISIBLE_FILTER}
 `;
 
+// For videos (ZASSET.ZKIND = 1) the master file lives at ZRESOURCETYPE = 1;
+// ZRESOURCETYPE = 0 is the still poster image. For photos the master is ZRESOURCETYPE = 0.
 export const CHECK_LOCAL_AVAILABILITY = `
-  SELECT ZLOCALAVAILABILITY as localAvailability
-  FROM ZINTERNALRESOURCE
-  WHERE ZASSET = ? AND ZRESOURCETYPE = 0 AND ZDATASTORESUBTYPE = 1
+  SELECT r.ZLOCALAVAILABILITY as localAvailability
+  FROM ZINTERNALRESOURCE r
+  JOIN ZASSET a ON a.Z_PK = r.ZASSET
+  WHERE r.ZASSET = ?
+    AND r.ZDATASTORESUBTYPE = 1
+    AND (
+      (a.ZKIND = 1 AND r.ZRESOURCETYPE = 1)
+      OR (a.ZKIND <> 1 AND r.ZRESOURCETYPE = 0)
+    )
   LIMIT 1
 `;
 

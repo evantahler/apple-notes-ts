@@ -204,13 +204,25 @@ function insertAsset(opts: {
     opts.fileSize ?? 2500000,
   );
 
-  // Internal resource (for local availability)
-  const rPk = ++resPk;
+  // Internal resource (for local availability).
+  // For videos (kind=1) the master file is ZRESOURCETYPE=1; for photos it's ZRESOURCETYPE=0.
+  const isVideo = (opts.kind ?? 0) === 1;
+  const masterAvailability = opts.locallyAvailable !== false ? 1 : -1;
   db.query(
     `INSERT INTO ZINTERNALRESOURCE
      (Z_PK, ZASSET, ZRESOURCETYPE, ZDATASTORESUBTYPE, ZLOCALAVAILABILITY)
-     VALUES (?, ?, 0, 1, ?)`,
-  ).run(rPk, pk, opts.locallyAvailable !== false ? 1 : -1);
+     VALUES (?, ?, ?, 1, ?)`,
+  ).run(++resPk, pk, isVideo ? 1 : 0, masterAvailability);
+
+  // For videos, also insert a poster row (ZRESOURCETYPE=0) with the inverse
+  // availability so tests can verify the query selects the master, not the poster.
+  if (isVideo) {
+    db.query(
+      `INSERT INTO ZINTERNALRESOURCE
+       (Z_PK, ZASSET, ZRESOURCETYPE, ZDATASTORESUBTYPE, ZLOCALAVAILABILITY)
+       VALUES (?, ?, 0, 1, ?)`,
+    ).run(++resPk, pk, masterAvailability === 1 ? -1 : 1);
+  }
 
   return pk;
 }
@@ -302,6 +314,22 @@ insertAsset({
   dateCreated: lastMonth,
 });
 
+// --- Photo 8: iCloud-only video (master stream not on disk; poster *is* on disk) ---
+insertAsset({
+  filename: "IMG_0008.MOV",
+  kind: 1,
+  uti: "com.apple.quicktime-movie",
+  width: 1920,
+  height: 1080,
+  duration: 30,
+  dateCreated: lastYear,
+  dateAdded: lastYear,
+  originalFilename: "IMG_0008.MOV",
+  title: "Old Vacation Video",
+  fileSize: 80000000,
+  locallyAvailable: false,
+});
+
 // ============================================================================
 // Albums
 // ============================================================================
@@ -369,5 +397,5 @@ db.close();
 console.log(`Created test Photos database at ${DB_PATH}`);
 console.log(`Assets created: ${assetPk} (including 1 trashed)`);
 console.log(`Albums created: ${albumPk}`);
-console.log("Photos: sunset (fav+gps), portrait, video, screenshot (hidden), iCloud-only, NYC (fav+gps), trashed");
+console.log("Photos: sunset (fav+gps), portrait, video, screenshot (hidden), iCloud-only, NYC (fav+gps), trashed, iCloud-only video");
 console.log("Albums: Vacation 2025, Best Shots (smart), To Sort (empty)");
