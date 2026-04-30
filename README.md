@@ -133,7 +133,9 @@ import { Photos } from "macos-ts";
 
 const db = new Photos();
 
-// List photos (filter by media type, favorites, date range, album)
+// List photos (filter by media type, favorites, date range, album).
+// Each result includes modifiedAt + fileSize, so callers can diff against a
+// manifest in one query without per-photo getPhoto() / fs.stat() round-trips.
 const allPhotos = db.photos();
 const favorites = db.photos({ favorite: true });
 const videos = db.photos({ mediaType: "video" });

@@ -29,7 +29,7 @@ export function registerPhotosTools(
     {
       title: "List photos",
       description:
-        "List photos and videos from the Apple Photos library with filtering by media type, favorites, date range, and album. Returns summary metadata (filename, dimensions, dates, GPS). Follow-up: use get_photo with a photoId for full details, or get_photo_url to get the file path.",
+        "List photos and videos from the Apple Photos library with filtering by media type, favorites, date range, and album. Returns summary metadata (filename, dimensions, dates including modifiedAt, fileSize, GPS) — enough to diff against a manifest without per-photo lookups. Follow-up: use get_photo with a photoId for full details, or get_photo_url to get the file path.",
       annotations: readOnlyAnnotations,
       inputSchema: {
         mediaType: z

@@ -11,10 +11,12 @@ const PHOTO_COLUMNS = `
     a.ZHEIGHT as height,
     a.ZDATECREATED as dateCreated,
     a.ZADDEDDATE as dateAdded,
+    a.ZMODIFICATIONDATE as modifiedAt,
     a.ZFAVORITE as favorite,
     a.ZHIDDEN as hidden,
     a.ZLATITUDE as latitude,
-    a.ZLONGITUDE as longitude`;
+    a.ZLONGITUDE as longitude,
+    attr.ZORIGINALFILESIZE as fileSize`;
 
 const PHOTO_DETAIL_COLUMNS = `
     ${PHOTO_COLUMNS},
@@ -23,8 +25,7 @@ const PHOTO_DETAIL_COLUMNS = `
     a.ZDURATION as duration,
     a.ZORIENTATION as orientation,
     attr.ZORIGINALFILENAME as originalFilename,
-    attr.ZTITLE as title,
-    attr.ZORIGINALFILESIZE as fileSize`;
+    attr.ZTITLE as title`;
 
 const VISIBLE_FILTER = `a.ZTRASHEDSTATE = 0 AND a.ZVISIBILITYSTATE = 0`;
 
@@ -54,10 +55,13 @@ export function buildListPhotosQuery(options?: ListPhotosOptions): {
 } {
   const params: (string | number)[] = [];
   const conditions: string[] = [VISIBLE_FILTER];
-  let fromClause = "ZASSET a";
+  // PHOTO_COLUMNS references attr.ZORIGINALFILESIZE, so the join is mandatory.
+  const ATTR_JOIN =
+    "LEFT JOIN ZADDITIONALASSETATTRIBUTES attr ON attr.ZASSET = a.Z_PK";
+  let fromClause = `ZASSET a ${ATTR_JOIN}`;
 
   if (options?.albumId != null) {
-    fromClause = "ZASSET a JOIN Z_33ASSETS j ON j.Z_3ASSETS = a.Z_PK";
+    fromClause = `ZASSET a ${ATTR_JOIN} JOIN Z_33ASSETS j ON j.Z_3ASSETS = a.Z_PK`;
     conditions.push("j.Z_33ALBUMS = ?");
     params.push(options.albumId);
   }

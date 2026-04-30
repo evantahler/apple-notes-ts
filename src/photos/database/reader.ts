@@ -21,10 +21,12 @@ interface PhotoRow {
   height: number;
   dateCreated: number | null;
   dateAdded: number | null;
+  modifiedAt: number | null;
   favorite: number;
   hidden: number;
   latitude: number | null;
   longitude: number | null;
+  fileSize: number | null;
 }
 
 interface PhotoLocationRow {
@@ -41,7 +43,6 @@ interface PhotoDetailRow extends PhotoRow, PhotoLocationRow {
   orientation: number | null;
   originalFilename: string | null;
   title: string | null;
-  fileSize: number | null;
 }
 
 interface AlbumRow {
@@ -77,6 +78,8 @@ export class PhotoReader {
       height: row.height ?? 0,
       dateCreated: Q.macTimeToDate(row.dateCreated),
       dateAdded: Q.macTimeToDate(row.dateAdded),
+      modifiedAt: Q.macTimeToDate(row.modifiedAt),
+      fileSize: row.fileSize,
       favorite: row.favorite === 1,
       hidden: row.hidden === 1,
       latitude: row.latitude && row.latitude !== 0 ? row.latitude : null,
@@ -147,7 +150,6 @@ export class PhotoReader {
       orientation: row.orientation ?? 1,
       originalFilename: row.originalFilename,
       title: row.title,
-      fileSize: row.fileSize,
       locallyAvailable,
     };
   }

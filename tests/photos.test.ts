@@ -116,8 +116,17 @@ describe("photos", () => {
     for (const p of photos) {
       expect(p.dateCreated).toBeInstanceOf(Date);
       expect(p.dateAdded).toBeInstanceOf(Date);
+      expect(p.modifiedAt).toBeInstanceOf(Date);
       expect(p.dateCreated.getTime()).toBeGreaterThan(0);
+      expect(p.modifiedAt.getTime()).toBeGreaterThan(0);
     }
+  });
+
+  test("list response includes fileSize for diffing", () => {
+    const photos = db.photos();
+    const sunset = photos.find((p) => p.filename === "IMG_0001.JPG");
+    expect(sunset).toBeDefined();
+    expect(sunset?.fileSize).toBe(5200000);
   });
 
   test("photos have GPS coordinates when available", () => {

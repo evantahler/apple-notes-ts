@@ -11,6 +11,8 @@ export interface PhotoMeta {
   height: number;
   dateCreated: Date;
   dateAdded: Date;
+  modifiedAt: Date;
+  fileSize: number | null;
   favorite: boolean;
   hidden: boolean;
   latitude: number | null;
@@ -24,7 +26,6 @@ export interface PhotoDetails extends PhotoMeta {
   orientation: number;
   originalFilename: string | null;
   title: string | null;
-  fileSize: number | null;
   locallyAvailable: boolean;
 }
 
