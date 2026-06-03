@@ -397,6 +397,22 @@ insertAsset({
   bundleScope: 3,
 });
 
+// --- Photo 11: Recently re-added old photo — exercises modifiedAfter over-inclusion ---
+// Issue #46: an old photo (capture + modification date = lastYear) that was
+// just added to the library (ZADDEDDATE = now). A modifiedAfter filter set
+// between lastYear and now must STILL return this via the ZADDEDDATE branch,
+// even though its modification/capture date is older than the cutoff.
+insertAsset({
+  filename: "IMG_RECENT_ADD.JPG",
+  width: 4032,
+  height: 3024,
+  dateCreated: lastYear,
+  dateAdded: now,
+  originalFilename: "IMG_RECENT_ADD.JPG",
+  title: "Old photo, just imported",
+  fileSize: 5000000,
+});
+
 // ============================================================================
 // Albums
 // ============================================================================

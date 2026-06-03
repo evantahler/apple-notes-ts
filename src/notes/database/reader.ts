@@ -244,9 +244,14 @@ export class NoteReader {
   listNotes(
     options?: ListNotesOptions,
   ): { meta: NoteMeta; zdata: Buffer | null }[] {
+    const params: number[] = [this.entityTypes.note];
+    if (options?.modifiedAfter) {
+      const t = Q.dateToMacTime(options.modifiedAfter);
+      params.push(t, t);
+    }
     const rows = this.db
-      .query(Q.listNotes(this.dateColumns))
-      .all(this.entityTypes.note) as NoteRow[];
+      .query(Q.listNotes(this.dateColumns, options?.modifiedAfter != null))
+      .all(...params) as NoteRow[];
 
     let results = rows.map((r) => ({
       meta: this.rowToMeta(r),

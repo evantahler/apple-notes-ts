@@ -81,6 +81,12 @@ export interface ListNotesOptions {
   folder?: string;
   account?: string;
   search?: string;
+  /**
+   * Incremental-read filter: return notes whose modified date OR created date
+   * is on or after this date. Deliberately over-inclusive — the OR also catches
+   * iCloud notes whose modification timestamp was stamped on another device.
+   */
+  modifiedAfter?: Date;
   sortBy?: NoteSortField;
   order?: SortOrder;
   limit?: number;

@@ -59,13 +59,19 @@ export function registerPhotosTools(
           .string()
           .optional()
           .describe(
-            "Only include photos created on or after this date (ISO 8601 string, e.g. '2024-01-01').",
+            "Filter by CAPTURE date — when the photo was taken (ISO 8601, e.g. '2024-01-01'). Only includes photos whose capture date is on or after this. Note: a 2020 photo imported today still has a 2020 capture date. For 'what changed since my last sync', use modifiedAfter instead.",
           ),
         beforeDate: z
           .string()
           .optional()
           .describe(
-            "Only include photos created on or before this date (ISO 8601 string, e.g. '2024-12-31').",
+            "Filter by CAPTURE date — only include photos taken on or before this date (ISO 8601, e.g. '2024-12-31'). Pairs with afterDate to bound a capture-date range.",
+          ),
+        modifiedAfter: z
+          .string()
+          .optional()
+          .describe(
+            "Incremental-read filter (ISO 8601, e.g. '2024-01-01'). Returns photos whose MODIFICATION date OR library-ADDED date is on or after this — deliberately over-inclusive so nothing changed is missed (a re-imported 2020 photo is returned because its added date is recent). Use this for incremental sync ('give me what changed since T'); use afterDate to filter by when a photo was taken.",
           ),
         sortBy: z
           .enum(["dateCreated", "dateAdded"])
@@ -91,6 +97,7 @@ export function registerPhotosTools(
       albumId,
       afterDate,
       beforeDate,
+      modifiedAfter,
       sortBy,
       order,
       limit,
@@ -104,6 +111,7 @@ export function registerPhotosTools(
             albumId,
             afterDate: afterDate ? new Date(afterDate) : undefined,
             beforeDate: beforeDate ? new Date(beforeDate) : undefined,
+            modifiedAfter: modifiedAfter ? new Date(modifiedAfter) : undefined,
             sortBy,
             order,
             limit,

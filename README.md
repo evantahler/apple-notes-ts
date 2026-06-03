@@ -32,6 +32,11 @@ const allNotes = db.notes();
 const workNotes = db.notes({ folder: "Work" });
 const recent = db.notes({ search: "meeting", sortBy: "modifiedAt", order: "desc", limit: 10 });
 
+// Incremental reads: notes changed since the last sync. Over-inclusive — matches
+// if the modified OR created date is >= the cutoff (the OR also catches iCloud
+// notes stamped as modified on another device), so nothing changed is missed.
+const changedNotes = db.notes({ modifiedAfter: lastSyncTime });
+
 // Search by title or snippet
 const results = db.search("meeting notes");
 const filtered = db.search("meeting notes", { folder: "Work", limit: 10 });
@@ -142,6 +147,10 @@ const videos = db.photos({ mediaType: "video" });
 const recent = db.photos({ afterDate: new Date("2024-01-01"), limit: 20 });
 const inAlbum = db.photos({ albumId: 1 });
 
+// Incremental reads: everything that CHANGED since the last sync. Use this
+// (not afterDate) for backup/sync — see the callout below.
+const changed = db.photos({ modifiedAfter: lastSyncTime });
+
 // Get full photo details (dimensions, GPS, file size, iCloud status)
 const details = db.getPhoto(photoId);
 console.log(details.title);             // "Sunset at the Beach"
@@ -157,6 +166,18 @@ const { url, locallyAvailable } = db.getPhotoUrl(photoId);
 
 // List albums (user and smart albums)
 const albums = db.albums();
+```
+
+#### `afterDate`/`beforeDate` vs `modifiedAfter`
+
+These filter on **different dates** for **different jobs** — don't confuse them:
+
+| Filter | Date checked | Use it for |
+| --- | --- | --- |
+| `afterDate` / `beforeDate` | Capture date (`ZDATECREATED`) — when the photo was *taken* | Browsing by when events happened ("my June trip"). A 2020 photo imported today still has a 2020 capture date. |
+| `modifiedAfter` | Modification date **OR** library-added date (`ZMODIFICATIONDATE` / `ZADDEDDATE`) | Incremental sync ("what changed since T"). Deliberately **over-inclusive** — matches if *either* date is `>= T`, so a re-imported old photo is still returned and nothing changed is ever missed. |
+
+```typescript
 const vacation = db.albums({ search: "vacation" });
 
 // Get album contents (photo IDs)
@@ -199,7 +220,7 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 
 - **list_accounts** — List all Apple Notes accounts on this Mac
 - **list_folders** — List folders, optionally filtered by account
-- **list_notes** — List notes with optional filtering (folder, account, text search), sorting (title, createdAt, modifiedAt), and limit
+- **list_notes** — List notes with optional filtering (folder, account, text search, `modifiedAfter` for incremental reads), sorting (title, createdAt, modifiedAt), and limit
 - **search_notes** — Search notes by title and content
 - **read_note** — Read a note as markdown (supports pagination)
 - **list_attachments** — List file-backed attachments for a note (set `includeInlineAttachments=true` to also return inline rows like URL chips, hashtags, mentions, tables, and galleries)
@@ -225,7 +246,7 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 
 #### Photos
 
-- **list_photos** — List photos/videos with filtering by media type, favorites, date range, album, and sorting
+- **list_photos** — List photos/videos with filtering by media type, favorites, capture-date range (`afterDate`/`beforeDate`), `modifiedAfter` (change/added date, for incremental reads), album, and sorting
 - **get_photo** — Get full photo metadata (dimensions, GPS, file size, iCloud availability)
 - **get_photo_url** — Get the local file:// URL for a photo's original file
 - **list_albums** — List user-created and smart albums with photo counts

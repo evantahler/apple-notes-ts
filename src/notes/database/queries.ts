@@ -50,7 +50,10 @@ export const COUNT_NOTES_PER_FOLDER = `
   GROUP BY n.ZFOLDER
 `;
 
-export const listNotes = (dateCols: DateColumns) => `
+// When hasModifiedAfter is true, the caller binds two extra params (the same
+// Mac timestamp twice) after the Z_ENT param. Over-inclusive on purpose: match
+// edits (modifiedAt) OR newly-created notes (createdAt), never under-include.
+export const listNotes = (dateCols: DateColumns, hasModifiedAfter = false) => `
   SELECT
     n.Z_PK as id,
     n.ZTITLE1 as title,
@@ -65,7 +68,11 @@ export const listNotes = (dateCols: DateColumns) => `
   LEFT JOIN ZICNOTEDATA nd ON nd.ZNOTE = n.Z_PK
   WHERE n.ZTITLE1 IS NOT NULL
     AND n.ZMARKEDFORDELETION != 1
-    AND n.Z_ENT = ?
+    AND n.Z_ENT = ?${
+      hasModifiedAfter
+        ? `\n    AND (n.${dateCols.modifiedAt} >= ? OR n.${dateCols.createdAt} >= ?)`
+        : ""
+    }
   ORDER BY n.${dateCols.modifiedAt} DESC
 `;
 
