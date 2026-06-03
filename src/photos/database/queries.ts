@@ -84,6 +84,13 @@ export function buildListPhotosQuery(options?: ListPhotosOptions): {
     conditions.push("a.ZDATECREATED <= ?");
     params.push(dateToMacTime(options.beforeDate));
   }
+  if (options?.modifiedAfter) {
+    // Over-inclusive on purpose: catch edits (ZMODIFICATIONDATE) AND
+    // newly-added assets (ZADDEDDATE), never under-include.
+    conditions.push("(a.ZMODIFICATIONDATE >= ? OR a.ZADDEDDATE >= ?)");
+    const t = dateToMacTime(options.modifiedAfter);
+    params.push(t, t);
+  }
 
   const sortCol =
     options?.sortBy === "dateAdded" ? "a.ZADDEDDATE" : "a.ZDATECREATED";

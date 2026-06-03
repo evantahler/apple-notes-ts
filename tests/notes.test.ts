@@ -74,7 +74,7 @@ describe("folders", () => {
 describe("notes", () => {
   test("returns all notes", () => {
     const notes = db.notes();
-    expect(notes).toHaveLength(14);
+    expect(notes).toHaveLength(15);
   });
 
   test("filters by folder name", () => {
@@ -181,6 +181,34 @@ describe("notes", () => {
     expect(limited).toHaveLength(2);
     expect(limited[0]?.title).toBe(allSorted[0]?.title);
     expect(limited[1]?.title).toBe(allSorted[1]?.title);
+  });
+
+  test("modifiedAfter returns recently-modified notes", () => {
+    // "Headings Test" was modified `now` (2025-06-15).
+    const t = new Date("2025-06-01T00:00:00Z");
+    const notes = db.notes({ modifiedAfter: t });
+    expect(notes.some((n) => n.title === "Headings Test")).toBe(true);
+  });
+
+  test("modifiedAfter excludes notes unchanged before the cutoff", () => {
+    // "Secret Note" was created and modified lastMonth (2025-05-15) — both
+    // dates are before the cutoff, so it must be excluded.
+    const t = new Date("2025-06-01T00:00:00Z");
+    const notes = db.notes({ modifiedAfter: t });
+    expect(notes.some((n) => n.title === "Secret Note")).toBe(false);
+  });
+
+  test("modifiedAfter is over-inclusive via createdAt", () => {
+    // "Sync Edge Note" was created `now` but modified lastMonth (iCloud
+    // cross-device stamp). It must still be returned — the filter matches on
+    // createdAt even though modifiedAt is before the cutoff.
+    const t = new Date("2025-06-01T00:00:00Z");
+    const notes = db.notes({ modifiedAfter: t });
+    const edge = notes.find((n) => n.title === "Sync Edge Note");
+    expect(edge).toBeDefined();
+    // Proves it was caught by the created-date branch, not modifiedAt.
+    expect(edge?.modifiedAt.getTime()).toBeLessThan(t.getTime());
+    expect(edge?.createdAt.getTime()).toBeGreaterThanOrEqual(t.getTime());
   });
 });
 

@@ -55,6 +55,13 @@ export interface ListPhotosOptions {
   albumId?: AlbumId;
   afterDate?: Date;
   beforeDate?: Date;
+  /**
+   * Incremental-read filter: return assets whose modification date
+   * (ZMODIFICATIONDATE) OR library-added date (ZADDEDDATE) is on or after this
+   * date. Deliberately over-inclusive so nothing changed is ever missed.
+   * Distinct from afterDate, which filters by capture date (ZDATECREATED).
+   */
+  modifiedAfter?: Date;
   limit?: number;
   sortBy?: PhotoSortField;
   order?: SortOrder;

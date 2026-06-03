@@ -33,8 +33,8 @@ afterAll(() => {
 describe("photos", () => {
   test("returns all visible non-hidden photos by default", () => {
     const photos = db.photos();
-    // 10 total - 1 trashed - 1 hidden = 8
-    expect(photos).toHaveLength(8);
+    // 11 total - 1 trashed - 1 hidden = 9
+    expect(photos).toHaveLength(9);
   });
 
   test("excludes trashed photos", () => {
@@ -95,6 +95,34 @@ describe("photos", () => {
       expect(p.dateCreated.getTime()).toBeGreaterThanOrEqual(after.getTime());
       expect(p.dateCreated.getTime()).toBeLessThanOrEqual(before.getTime());
     }
+  });
+
+  test("modifiedAfter returns recently-modified photos", () => {
+    // recentFav (IMG_0006.HEIC) was created/modified `now` (2025-06-15).
+    const t = new Date("2025-06-01T00:00:00Z");
+    const photos = db.photos({ modifiedAfter: t });
+    expect(photos.some((p) => p.filename === "IMG_0006.HEIC")).toBe(true);
+  });
+
+  test("modifiedAfter excludes photos unchanged before the cutoff", () => {
+    // IMG_0005.JPG was created, modified, and added lastYear (2024-06-15) —
+    // every date is before the cutoff, so it must be excluded.
+    const t = new Date("2025-06-01T00:00:00Z");
+    const photos = db.photos({ modifiedAfter: t });
+    expect(photos.some((p) => p.filename === "IMG_0005.JPG")).toBe(false);
+  });
+
+  test("modifiedAfter is over-inclusive via ZADDEDDATE", () => {
+    // IMG_RECENT_ADD.JPG has an OLD capture/modification date (lastYear) but
+    // was added to the library `now`. It must still be returned — the filter
+    // matches on ZADDEDDATE even though ZMODIFICATIONDATE is before the cutoff.
+    const t = new Date("2025-06-01T00:00:00Z");
+    const photos = db.photos({ modifiedAfter: t });
+    const recent = photos.find((p) => p.filename === "IMG_RECENT_ADD.JPG");
+    expect(recent).toBeDefined();
+    // Proves it was caught by the added-date branch, not the modification date.
+    expect(recent?.modifiedAt.getTime()).toBeLessThan(t.getTime());
+    expect(recent?.dateAdded.getTime()).toBeGreaterThanOrEqual(t.getTime());
   });
 
   test("filters by albumId", () => {

@@ -800,6 +800,22 @@ db.query(
    VALUES (303, ${ENT_ATTACHMENT}, 1, ?, 'com.apple.notes.table', ?, ?)`,
 ).run(tableAttachmentId, tableNotePk, tableBlob);
 
+// Note 15: Sync edge case — created AFTER the cutoff but modified BEFORE it.
+// Issue #46: iCloud stamps a note's modification date on the originating
+// device, so a note can appear locally as created `now` yet modified
+// `lastMonth`. A modifiedAfter filter between lastMonth and now must STILL
+// return this via the createdAt branch (over-inclusion).
+// "Sync Edge Note\n" = 15, "Created after T, modified before T.\n" = 36
+insertNote({
+  title: "Sync Edge Note",
+  snippet: "Created after T, modified before T.",
+  folderId: 10,
+  createdAt: now,
+  modifiedAt: lastMonth,
+  noteText: "Sync Edge Note\nCreated after T, modified before T.\n",
+  attributeRuns: [titleRun(15), bodyRun(36)],
+});
+
 // ============================================================================
 // Create fake attachment files
 // ============================================================================
@@ -820,6 +836,6 @@ writeFileSync(resolve(pdfDir, "FallbackPDF.pdf"), "fake-pdf-data-for-testing");
 
 db.close();
 console.log(`Created test database at ${DB_PATH}`);
-console.log("Notes created: 14");
+console.log("Notes created: 15");
 console.log("Accounts: iCloud, On My Mac");
 console.log("Folders: Notes, Work, Personal");

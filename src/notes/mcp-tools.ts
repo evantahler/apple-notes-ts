@@ -92,6 +92,12 @@ export function registerNotesTools(
           .describe(
             "Text to filter notes by, matched case-insensitively against title and snippet.",
           ),
+        modifiedAfter: z
+          .string()
+          .optional()
+          .describe(
+            "Incremental-read filter (ISO 8601, e.g. '2024-01-01'). Returns notes whose MODIFIED date OR CREATED date is on or after this — deliberately over-inclusive (the OR also catches iCloud notes stamped as modified on another device) so nothing changed is missed. Use this for incremental sync ('give me what changed since T').",
+          ),
         sortBy: z
           .enum(["title", "createdAt", "modifiedAt"])
           .optional()
@@ -111,9 +117,18 @@ export function registerNotesTools(
           .describe("Maximum number of notes to return."),
       },
     },
-    async ({ folder, account, search, sortBy, order, limit }) =>
+    async ({ folder, account, search, modifiedAfter, sortBy, order, limit }) =>
       wrapTool(
-        () => notes.notes({ folder, account, search, sortBy, order, limit }),
+        () =>
+          notes.notes({
+            folder,
+            account,
+            search,
+            modifiedAfter: modifiedAfter ? new Date(modifiedAfter) : undefined,
+            sortBy,
+            order,
+            limit,
+          }),
         [
           {
             tool: "read_note",
