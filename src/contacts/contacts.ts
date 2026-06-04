@@ -6,6 +6,7 @@ import { ContactNotFoundError, GroupNotFoundError } from "./errors.ts";
 import type {
   Contact,
   ContactDetails,
+  ContactSummary,
   Group,
   ListContactsOptions,
   ListGroupsOptions,
@@ -35,7 +36,7 @@ export class Contacts {
     return contact;
   }
 
-  search(query: string, options?: SearchContactsOptions): Contact[] {
+  search(query: string, options?: SearchContactsOptions): ContactSummary[] {
     return this.reader.searchContacts(query, options);
   }
 

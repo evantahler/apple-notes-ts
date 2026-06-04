@@ -301,6 +301,26 @@ describe("search", () => {
     expect(results.length).toBeGreaterThan(0);
     expect(results.every((r) => r.firstName === "Jane")).toBe(true);
   });
+
+  test("includes phones and emails inline, primary first", () => {
+    const john = db.search("John").find((r) => r.firstName === "John");
+    expect(john).toBeDefined();
+
+    expect(john?.phones).toHaveLength(2);
+    expect(john?.phones[0]?.isPrimary).toBe(true);
+    expect(john?.phones[0]?.number).toBe("+1 (555) 123-4567");
+
+    expect(john?.emails).toHaveLength(2);
+    expect(john?.emails[0]?.isPrimary).toBe(true);
+    expect(john?.emails[0]?.address).toBe("john@acme.com");
+  });
+
+  test("returns empty arrays for a contact with no phones or emails", () => {
+    const bob = db.search("Bob").find((r) => r.firstName === "Bob");
+    expect(bob).toBeDefined();
+    expect(bob?.phones).toEqual([]);
+    expect(bob?.emails).toEqual([]);
+  });
 });
 
 // ============================================================================

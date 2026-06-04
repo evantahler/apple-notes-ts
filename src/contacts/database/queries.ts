@@ -61,6 +61,22 @@ export const LIST_PHONES = `
   ORDER BY ZISPRIMARY DESC, ZORDERINGINDEX ASC
 `;
 
+// Batched lookups for enriching search results: one query each for phones and
+// emails across many owners. The IN list is sized at call time (bun:sqlite
+// binds positionally). Ordering mirrors LIST_PHONES/LIST_EMAILS so per-owner
+// grouping keeps primary numbers/addresses first.
+export const PHONES_FOR_OWNERS = (n: number): string => `
+  SELECT ZOWNER as owner, ZFULLNUMBER as number, ZLABEL as label, ZISPRIMARY as isPrimary
+  FROM ZABCDPHONENUMBER WHERE ZOWNER IN (${Array(n).fill("?").join(",")})
+  ORDER BY ZISPRIMARY DESC, ZORDERINGINDEX ASC
+`;
+
+export const EMAILS_FOR_OWNERS = (n: number): string => `
+  SELECT ZOWNER as owner, ZADDRESS as address, ZLABEL as label, ZISPRIMARY as isPrimary
+  FROM ZABCDEMAILADDRESS WHERE ZOWNER IN (${Array(n).fill("?").join(",")})
+  ORDER BY ZISPRIMARY DESC, ZORDERINGINDEX ASC
+`;
+
 export const LIST_ADDRESSES = `
   SELECT ZSTREET as street, ZCITY as city, ZSTATE as state,
          ZZIPCODE as zipCode, ZCOUNTRYNAME as country, ZLABEL as label

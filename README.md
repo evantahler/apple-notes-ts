@@ -129,12 +129,15 @@ const allContacts = db.contacts();
 const sorted = db.contacts({ sortBy: "modifiedAt", order: "desc", limit: 10 });
 const inGroup = db.contacts({ groupId: 1 });
 
-// Search by name, organization, phone number, or email
+// Search by name, organization, phone number, or email.
+// Results include phones and emails inline (primary first).
 const results = db.search("John");
+console.log(results[0].phones); // [{ number, label, isPrimary }]
+console.log(results[0].emails); // [{ address, label, isPrimary }]
 const byPhone = db.search("555-1234");
 const byEmail = db.search("alice@example.com");
 
-// Get full contact details (emails, phones, addresses, etc.)
+// Get full contact details (addresses, social profiles, notes, etc.)
 const details = db.getContact(contactId);
 console.log(details.emails);     // [{ address, label, isPrimary }]
 console.log(details.phones);     // [{ number, label, isPrimary }]
@@ -258,7 +261,7 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 
 - **list_contacts** — List contacts with optional search, sorting (displayName, createdAt, modifiedAt), group filtering, and limit
 - **get_contact** — Get full contact details (emails, phones, addresses, URLs, social profiles, related names, dates)
-- **search_contacts** — Search contacts by name, organization, phone number, or email address
+- **search_contacts** — Search contacts by name, organization, phone number, or email address (results include phones and emails inline)
 - **list_groups** — List all contact groups with member counts
 - **list_group_members** — List contacts in a specific group
 

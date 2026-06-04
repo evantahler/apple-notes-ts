@@ -8,6 +8,7 @@ import type {
   ContactPhone,
   ContactRelatedName,
   ContactSocialProfile,
+  ContactSummary,
   ContactURL,
   Group,
   ListContactsOptions,
@@ -275,7 +276,61 @@ export class ContactReader {
     };
   }
 
-  searchContacts(query: string, options?: SearchContactsOptions): Contact[] {
+  // Enrich summary contacts with their phones and emails via two batched
+  // queries (not one-per-contact). Used by searchContacts so a lookup surfaces
+  // the contact methods people actually search for without a second round-trip.
+  private enrichWithContactMethods(contacts: Contact[]): ContactSummary[] {
+    if (contacts.length === 0) return [];
+
+    const ids = contacts.map((c) => c.id);
+
+    const phonesByOwner = new Map<number, ContactPhone[]>();
+    for (const r of this.db
+      .query(Q.PHONES_FOR_OWNERS(ids.length))
+      .all(...ids) as {
+      owner: number;
+      number: string;
+      label: string | null;
+      isPrimary: number;
+    }[]) {
+      const list = phonesByOwner.get(r.owner) ?? [];
+      list.push({
+        number: r.number,
+        label: this.cleanLabel(r.label),
+        isPrimary: r.isPrimary === 1,
+      });
+      phonesByOwner.set(r.owner, list);
+    }
+
+    const emailsByOwner = new Map<number, ContactEmail[]>();
+    for (const r of this.db
+      .query(Q.EMAILS_FOR_OWNERS(ids.length))
+      .all(...ids) as {
+      owner: number;
+      address: string;
+      label: string | null;
+      isPrimary: number;
+    }[]) {
+      const list = emailsByOwner.get(r.owner) ?? [];
+      list.push({
+        address: r.address,
+        label: this.cleanLabel(r.label),
+        isPrimary: r.isPrimary === 1,
+      });
+      emailsByOwner.set(r.owner, list);
+    }
+
+    return contacts.map((c) => ({
+      ...c,
+      phones: phonesByOwner.get(c.id) ?? [],
+      emails: emailsByOwner.get(c.id) ?? [],
+    }));
+  }
+
+  searchContacts(
+    query: string,
+    options?: SearchContactsOptions,
+  ): ContactSummary[] {
     const pattern = `%${query}%`;
     const rows = this.db
       .query(Q.SEARCH_CONTACTS)
@@ -295,7 +350,8 @@ export class ContactReader {
     }
 
     const limit = options?.limit ?? 50;
-    return results.slice(0, limit);
+    // Slice before enriching so we only fetch contact methods for returned rows.
+    return this.enrichWithContactMethods(results.slice(0, limit));
   }
 
   listGroups(options?: ListGroupsOptions): Group[] {

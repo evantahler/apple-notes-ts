@@ -12,6 +12,7 @@ export type {
   ContactRelatedName,
   ContactSocialProfile,
   ContactSortField,
+  ContactSummary,
   ContactURL,
   Group,
   GroupId,
