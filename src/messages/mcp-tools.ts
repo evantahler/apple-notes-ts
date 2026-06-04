@@ -294,7 +294,7 @@ export function registerMessagesTools(
     {
       title: "Send a message",
       description:
-        "Send a new iMessage or SMS via Messages.app. This actually delivers a real message and CANNOT be undone — confirm the recipient and text first. Target either an existing conversation by chatId (from list_chats) or a raw handle (phone number or email); provide exactly one. When sending by chatId the service is taken from the chat; when sending by handle it defaults to iMessage (set service to 'SMS' to force a text). The first send prompts for macOS Automation permission, and macOS gives no delivery confirmation (success means the request was dispatched, not delivered). Follow-up: use list_messages on the chat to confirm it appears.",
+        "Send a new text message (iMessage or SMS) via Messages.app — text someone by phone number or email. This actually delivers a real message and CANNOT be undone — confirm the recipient and text first. Target either an existing conversation by chatId (from list_chats) or a raw handle (phone number or email); provide exactly one. When sending by chatId the service is taken from the chat; when sending by handle it defaults to iMessage (set service to 'SMS' to force a text). The first send prompts for macOS Automation permission, and macOS gives no delivery confirmation (success means the request was dispatched, not delivered). Follow-up: use list_messages on the chat to confirm it appears.",
       annotations: writeAnnotations,
       inputSchema: {
         text: z
