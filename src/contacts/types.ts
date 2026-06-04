@@ -59,6 +59,13 @@ export interface ContactDate {
   label: string | null;
 }
 
+// Search results carry the two contact methods people actually search for
+// (phones, emails) inline. The rest of ContactDetails still requires getContact.
+export interface ContactSummary extends Contact {
+  emails: ContactEmail[];
+  phones: ContactPhone[];
+}
+
 export interface ContactDetails extends Contact {
   emails: ContactEmail[];
   phones: ContactPhone[];

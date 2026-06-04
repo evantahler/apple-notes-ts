@@ -97,7 +97,7 @@ export function registerContactsTools(
     {
       title: "Search contacts",
       description:
-        "Search contacts by name, organization, phone number, or email address. Returns summary metadata for matches. Follow-up: use get_contact with a contactId for full details.",
+        "Search contacts by name, organization, phone number, or email address. Returns summary metadata plus phone numbers and email addresses for each match. Follow-up: use get_contact with a contactId for full details (addresses, social profiles, notes, etc.).",
       annotations: readOnlyAnnotations,
       inputSchema: {
         query: z

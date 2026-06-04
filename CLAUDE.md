@@ -35,6 +35,7 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 - **Contacts database**: Apple stores contacts in per-account source databases at `~/Library/Application Support/AddressBook/Sources/<UUID>/AddressBook-v22.abcddb`. The root `AddressBook-v22.abcddb` is typically empty. The connection logic auto-discovers the source DB with the most contacts. Core Data schema with ZABCDRECORD as the main table
 - **Contacts entity types**: Z_ENT=22 for contacts, Z_ENT=19 for groups (from Z_PRIMARYKEY table)
 - **Contact details**: Stored in separate tables (ZABCDEMAILADDRESS, ZABCDPHONENUMBER, ZABCDPOSTALADDRESS, etc.) with ZOWNER FK to ZABCDRECORD.Z_PK
+- **Search enrichment**: `search()` / `search_contacts` returns the `ContactSummary` type — the lean `Contact` summary plus `phones` and `emails` arrays (the two contact methods people search for), fetched via two batched `..._FOR_OWNERS` queries (`reader.ts` `enrichWithContactMethods`) after the groupId filter + limit slice, so only returned rows are enriched. The broad `list_contacts` / `list_group_members` paths stay lean (`Contact`, no phones/emails). Full detail (addresses, social, notes, etc.) still requires `getContact`
 - **Mac timestamps (Contacts)**: Seconds since 2001-01-01 (same as Notes, uses macTimeToDate/dateToMacTime)
 - **Contact labels**: Apple stores built-in labels as `_$!<Label>!$_` — cleaned to plain strings by the reader
 - **Group membership**: Z_22PARENTGROUPS junction table (Z_22CONTACTS → contact PK, Z_19PARENTGROUPS1 → group PK)
