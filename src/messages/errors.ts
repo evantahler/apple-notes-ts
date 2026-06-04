@@ -20,3 +20,23 @@ export class MessageNotFoundError extends MacOSError {
     this.name = "MessageNotFoundError";
   }
 }
+
+/**
+ * Raised when sending a message via osascript fails. `category` is
+ * "access_denied" when macOS blocks the Apple Events automation (TCC),
+ * "invalid_input" for bad arguments, and "internal" for any other osascript
+ * failure.
+ */
+export class MessageSendError extends MacOSError {
+  constructor(
+    message: string,
+    options?: {
+      category?: "internal" | "access_denied" | "invalid_input";
+      retryable?: boolean;
+      recovery?: string;
+    },
+  ) {
+    super(message, options);
+    this.name = "MessageSendError";
+  }
+}

@@ -13,6 +13,20 @@ export const readOnlyAnnotations = {
   openWorldHint: false as const,
 };
 
+/**
+ * Annotations for a write/command tool with an external side effect (e.g.
+ * sending a message). Not read-only, not idempotent (each call acts again), and
+ * open-world since it reaches beyond this Mac. `destructiveHint` stays false —
+ * it creates rather than deletes local data — but such actions are typically
+ * irreversible, so say so in the tool description.
+ */
+export const writeAnnotations = {
+  readOnlyHint: false as const,
+  destructiveHint: false as const,
+  idempotentHint: false as const,
+  openWorldHint: true as const,
+};
+
 export function toolError(e: MacOSError) {
   return {
     isError: true as const,

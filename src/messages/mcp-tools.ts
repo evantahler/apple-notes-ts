@@ -3,12 +3,14 @@ import {
   type McpServerInstance,
   readOnlyAnnotations,
   wrapTool,
+  writeAnnotations,
 } from "../mcp-helpers.ts";
 import type { Messages } from "./messages.ts";
 
 export const messagesCapability = {
   name: "iMessage / SMS",
-  description: "Read-only access to iMessage and SMS conversations on this Mac",
+  description:
+    "Read iMessage and SMS conversations on this Mac, and send new messages",
   tools: [
     "list_chats",
     "get_chat",
@@ -17,6 +19,7 @@ export const messagesCapability = {
     "search_messages",
     "list_message_attachments",
     "list_handles",
+    "send_message",
   ],
   startWith: "list_chats or search_messages",
 };
@@ -284,5 +287,50 @@ export function registerMessagesTools(
       },
     },
     async ({ messageId }) => wrapTool(() => messages.attachments(messageId)),
+  );
+
+  server.registerTool(
+    "send_message",
+    {
+      title: "Send a message",
+      description:
+        "Send a new iMessage or SMS via Messages.app. This actually delivers a real message and CANNOT be undone — confirm the recipient and text first. Target either an existing conversation by chatId (from list_chats) or a raw handle (phone number or email); provide exactly one. When sending by chatId the service is taken from the chat; when sending by handle it defaults to iMessage (set service to 'SMS' to force a text). The first send prompts for macOS Automation permission, and macOS gives no delivery confirmation (success means the request was dispatched, not delivered). Follow-up: use list_messages on the chat to confirm it appears.",
+      annotations: writeAnnotations,
+      inputSchema: {
+        text: z
+          .string()
+          .min(1)
+          .describe("The message body to send. Must be non-empty."),
+        handle: z
+          .string()
+          .optional()
+          .describe(
+            "Recipient phone number or email. Provide this OR chatId, not both.",
+          ),
+        chatId: z
+          .number()
+          .int()
+          .optional()
+          .describe(
+            "Numeric chat ID (from list_chats) to send into. Provide this OR handle, not both.",
+          ),
+        service: z
+          .enum(["iMessage", "SMS"])
+          .optional()
+          .describe(
+            "Service to use when sending by handle. Defaults to 'iMessage'. Ignored when chatId is given.",
+          ),
+      },
+    },
+    async ({ text, handle, chatId, service }) =>
+      wrapTool(
+        () => messages.send({ text, handle, chatId, service }),
+        [
+          {
+            tool: "list_messages",
+            description: "Read the conversation to confirm the message appears",
+          },
+        ],
+      ),
   );
 }

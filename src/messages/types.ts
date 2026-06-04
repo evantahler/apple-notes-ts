@@ -69,3 +69,22 @@ export interface SearchMessagesOptions {
   chatId?: number;
   limit?: number;
 }
+
+export type MessageService = "iMessage" | "SMS";
+
+export interface SendMessageOptions {
+  text: string;
+  /** Recipient phone number or email. Mutually exclusive with `chatId`. */
+  handle?: string;
+  /** Existing conversation to send into. Mutually exclusive with `handle`. */
+  chatId?: number;
+  /** Service to use when sending by `handle`. Defaults to "iMessage". */
+  service?: MessageService;
+}
+
+export interface SendMessageResult {
+  /** The handle or chat guid the message was sent to. */
+  to: string;
+  service: MessageService;
+  mode: "handle" | "chat";
+}

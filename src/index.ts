@@ -38,12 +38,16 @@ export type {
   MessageAttachment,
   MessageId,
   MessageMeta,
+  MessageService,
   MessagesOptions,
   SearchMessagesOptions,
+  SendMessageOptions,
+  SendMessageResult,
 } from "./messages/index.ts";
 export {
   ChatNotFoundError,
   MessageNotFoundError,
+  MessageSendError,
   Messages,
 } from "./messages/index.ts";
 export type {

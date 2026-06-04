@@ -21,7 +21,7 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 
 - **Runtime**: Bun (uses bun:sqlite, node:zlib built-ins)
 - **Access method**: Read-only SQLite against macOS databases
-- **No AppleScript/JXA** — all access is through the database
+- **No AppleScript for reads** — all *reading* is through the database. The one exception is `Messages.send()` (sending a message), which has no DB path and must drive Messages.app via AppleScript/osascript (see the Messages write-path note below)
 - **Structure**: Each data source lives in its own `src/<source>/` directory (e.g. `src/notes/`)
 - **Note content**: Stored as gzip-compressed protobuf in `ZICNOTEDATA.ZDATA`, decoded via protobufjs
 - **Markdown conversion**: Custom converter walks protobuf AttributeRun entries to emit markdown
@@ -31,6 +31,7 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 - **Messages database**: `~/Library/Messages/chat.db` — standard relational schema (handle, chat, message, attachment tables joined via junction tables)
 - **Mac timestamps (Messages)**: Nanoseconds since 2001-01-01 (divide by 1e9, then add 978307200 for Unix epoch)
 - **Message text**: Stored in `text` column, or as NSArchiver-encoded `attributedBody` blob when rich text
+- **Sending messages (the lone write path)**: `Messages.send({ text, handle | chatId, service? })` is the only non-read-only operation in the package. `chat.db` is a passive log — writing to it transmits nothing — so sending drives Messages.app via Apple Events: `Bun.spawnSync(["osascript", "-e", SEND_APPLESCRIPT, target, text, service, mode])`. **AppleScript, not JXA**: on macOS 26 the JXA bridge to Messages is broken (`Application("Messages").services()` throws "Application isn't running" even when it is). The AppleScript form resolves `1st service whose service type is iMessage|SMS` then `participant <handle>`, or `chat id <guid>` for chat mode. User data (recipient, body) is passed as **argv** bound to `on run {target, body, kind, mode}`, never interpolated into the script, to avoid injection. Logic lives in `src/messages/send.ts`: `buildSendArgs` (pure validation, fixture-testable) and `classifySendError` (maps osascript failures — TCC error `-1743`/"Not authorized" → `MessageSendError` with `category: access_denied`). The AppleScript recipient-resolution itself can't be fixture-tested and must be verified on a real Mac (validated end-to-end on macOS 26.3). Messages.app must be running; first send triggers a macOS **Automation** TCC prompt; there is **no delivery confirmation** (exit 0 ≠ delivered). MCP tool `send_message` uses `writeAnnotations` (in `src/mcp-helpers.ts`), not `readOnlyAnnotations`.
 - **Contacts database**: Apple stores contacts in per-account source databases at `~/Library/Application Support/AddressBook/Sources/<UUID>/AddressBook-v22.abcddb`. The root `AddressBook-v22.abcddb` is typically empty. The connection logic auto-discovers the source DB with the most contacts. Core Data schema with ZABCDRECORD as the main table
 - **Contacts entity types**: Z_ENT=22 for contacts, Z_ENT=19 for groups (from Z_PRIMARYKEY table)
 - **Contact details**: Stored in separate tables (ZABCDEMAILADDRESS, ZABCDPHONENUMBER, ZABCDPOSTALADDRESS, etc.) with ZOWNER FK to ZABCDRECORD.Z_PK
@@ -74,6 +75,7 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 - `src/messages/database/connection.ts` — Messages SQLite database connection
 - `src/messages/database/queries.ts` — Messages SQL queries and nanosecond time conversion
 - `src/messages/database/reader.ts` — Messages query execution, row mapping, and attributedBody decoding
+- `src/messages/send.ts` — Send-message logic: `SEND_APPLESCRIPT` script, `buildSendArgs` (validation/arg resolution), `classifySendError` (osascript failure → `MessageSendError`)
 - `src/contacts/contacts.ts` — Main `Contacts` class (public API for Apple Contacts)
 - `src/contacts/index.ts` — Contacts barrel export
 - `src/contacts/types.ts` — TypeScript type definitions for Contacts
