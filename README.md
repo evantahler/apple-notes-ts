@@ -1,6 +1,6 @@
 # macos-ts
 
-TypeScript package for accessing macOS data via direct SQLite access — no AppleScript, no network calls. Currently supports **Apple Notes**, **Apple Messages** (iMessage/SMS), **Apple Contacts**, and **Apple Photos**.
+TypeScript package for accessing macOS data via direct SQLite access — reads use no AppleScript and make no network calls. Currently supports **Apple Notes**, **Apple Messages** (iMessage/SMS), **Apple Contacts**, and **Apple Photos**. Sending an iMessage/SMS is the one write operation, and it is the only feature that uses Apple Events (osascript); see [Messages](#messages).
 
 ## Requirements
 
@@ -96,9 +96,26 @@ const inChat = db.search("dinner tonight", { chatId: 1, limit: 10 });
 // Attachments
 const attachments = db.attachments(messageId);
 
+// Send a new message (the only write operation in this package).
+// Target a raw handle (phone/email)...
+db.send({ handle: "+15551234567", text: "On my way!" });
+db.send({ handle: "friend@example.com", text: "Hi", service: "SMS" });
+// ...or an existing conversation by chatId (service taken from the chat):
+db.send({ chatId: 1, text: "Sounds good" });
+
 // Cleanup
 db.close();
 ```
+
+> **Sending requires Apple Events.** `chat.db` is only a passive log, so sending
+> a message means driving Messages.app via `osascript` (AppleScript). Consequences:
+>
+> - **macOS Automation permission** is required — the first `send()` triggers a
+>   one-time TCC prompt to allow your terminal/host app to control "Messages".
+> - **No delivery confirmation.** A successful return means the request was
+>   dispatched, not that it was delivered. Failures throw `MessageSendError`.
+> - **Irreversible.** A sent message cannot be unsent.
+> - Messages.app must be open and signed in.
 
 ### Contacts
 
@@ -235,6 +252,7 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 - **get_message** — Get a single message by ID
 - **search_messages** — Search message text across all conversations or within a specific chat
 - **list_message_attachments** — List attachments for a specific message
+- **send_message** — Send a new iMessage/SMS to a handle or chatId (the only write tool; requires macOS Automation permission, gives no delivery confirmation, and cannot be undone)
 
 #### Contacts
 
@@ -291,7 +309,7 @@ Errors: `DatabaseNotFoundError` (missing DB or no Full Disk Access), `NoteNotFou
 
 **Messages**: Pass `dbPath` to `new Messages()` to override auto-detection (defaults to `~/Library/Messages/chat.db`).
 
-Errors: `DatabaseNotFoundError`, `ChatNotFoundError`, `MessageNotFoundError`.
+Errors: `DatabaseNotFoundError`, `ChatNotFoundError`, `MessageNotFoundError`, `MessageSendError` (sending failed; `category` is `access_denied` when macOS Automation permission is missing, otherwise `internal`).
 
 **Contacts**: Pass `dbPath` to `new Contacts()` to override auto-detection (defaults to `~/Library/Application Support/AddressBook/AddressBook-v22.abcddb`). Labels are automatically cleaned from Apple's internal `_$!<Label>!$_` format to plain strings (e.g., "Home", "Work", "Mobile").
 

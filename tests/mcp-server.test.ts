@@ -72,9 +72,9 @@ function getErrorJson(result: any) {
 // ============================================================================
 
 describe("server metadata", () => {
-  test("server exposes 26 tools", async () => {
+  test("server exposes 27 tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(26);
+    expect(tools).toHaveLength(27);
   });
 
   test("each tool has a description", async () => {
@@ -115,6 +115,7 @@ describe("server metadata", () => {
       "search_messages",
       "search_notes",
       "search_photos",
+      "send_message",
     ]);
   });
 
@@ -130,14 +131,21 @@ describe("server metadata", () => {
     expect(props.limit?.description).toBeTruthy();
   });
 
-  test("all tools have readOnlyHint annotation", async () => {
+  // send_message is the lone write/command tool; everything else is read-only.
+  const WRITE_TOOLS = new Set(["send_message"]);
+
+  test("read tools are read-only and the write tool is annotated as such", async () => {
     const { tools } = await client.listTools();
     for (const tool of tools) {
       // biome-ignore lint/suspicious/noExplicitAny: test
       const annotations = (tool as any).annotations;
-      if (annotations) {
+      if (!annotations) continue;
+      expect(annotations.destructiveHint).toBe(false);
+      if (WRITE_TOOLS.has(tool.name)) {
+        expect(annotations.readOnlyHint).toBe(false);
+        expect(annotations.openWorldHint).toBe(true);
+      } else {
         expect(annotations.readOnlyHint).toBe(true);
-        expect(annotations.destructiveHint).toBe(false);
       }
     }
   });
