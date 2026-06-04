@@ -331,10 +331,16 @@ export class ContactReader {
     query: string,
     options?: SearchContactsOptions,
   ): ContactSummary[] {
-    const pattern = `%${query}%`;
+    const tokens = query.trim().split(/\s+/).filter(Boolean);
+    // Empty/whitespace query → preserve "match all" behavior with one empty token.
+    const effectiveTokens = tokens.length > 0 ? tokens : [""];
+    const params = effectiveTokens.flatMap((t) => {
+      const p = `%${t}%`;
+      return [p, p, p, p, p];
+    });
     const rows = this.db
-      .query(Q.SEARCH_CONTACTS)
-      .all(pattern, pattern, pattern, pattern, pattern) as ContactRow[];
+      .query(Q.SEARCH_CONTACTS(effectiveTokens.length))
+      .all(...params) as ContactRow[];
 
     let results = rows.map((r) => this.rowToContact(r));
 

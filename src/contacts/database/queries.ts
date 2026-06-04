@@ -25,19 +25,25 @@ export const GET_CONTACT = `
   WHERE r.Z_PK = ? AND r.Z_ENT = 22
 `;
 
-export const SEARCH_CONTACTS = `
-  SELECT DISTINCT ${CONTACT_COLUMNS}
-  FROM ZABCDRECORD r
-  LEFT JOIN ZABCDPHONENUMBER p ON p.ZOWNER = r.Z_PK
-  LEFT JOIN ZABCDEMAILADDRESS e ON e.ZOWNER = r.Z_PK
-  WHERE r.Z_ENT = 22
-    AND (
+// Each whitespace-separated query token must match at least one column; tokens
+// are AND-ed together so "Ben Sabrin" matches a contact with ZFIRSTNAME='Ben'
+// and ZLASTNAME='Sabrin' (no single column holds the whole phrase). Each clause
+// binds 5 `?` patterns positionally.
+const SEARCH_TOKEN_CLAUSE = `(
       r.ZFIRSTNAME LIKE ?
       OR r.ZLASTNAME LIKE ?
       OR r.ZORGANIZATION LIKE ?
       OR p.ZFULLNUMBER LIKE ?
       OR e.ZADDRESS LIKE ?
-    )
+    )`;
+
+export const SEARCH_CONTACTS = (tokenCount: number): string => `
+  SELECT DISTINCT ${CONTACT_COLUMNS}
+  FROM ZABCDRECORD r
+  LEFT JOIN ZABCDPHONENUMBER p ON p.ZOWNER = r.Z_PK
+  LEFT JOIN ZABCDEMAILADDRESS e ON e.ZOWNER = r.Z_PK
+  WHERE r.Z_ENT = 22
+    AND ${Array(tokenCount).fill(SEARCH_TOKEN_CLAUSE).join("\n    AND ")}
   ORDER BY r.ZSORTINGLASTNAME ASC, r.ZSORTINGFIRSTNAME ASC
 `;
 
