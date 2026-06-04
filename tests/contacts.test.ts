@@ -284,6 +284,35 @@ describe("search", () => {
     expect(results.length).toBeGreaterThan(0);
   });
 
+  test("finds a contact by full name across columns", () => {
+    const results = db.search("John Doe");
+    expect(
+      results.some((r) => r.firstName === "John" && r.lastName === "Doe"),
+    ).toBe(true);
+  });
+
+  test("multi-word search is order-independent", () => {
+    const results = db.search("Doe John");
+    expect(
+      results.some((r) => r.firstName === "John" && r.lastName === "Doe"),
+    ).toBe(true);
+  });
+
+  test("multi-word search can span name and organization", () => {
+    const results = db.search("John Acme");
+    expect(
+      results.some((r) => r.firstName === "John" && r.lastName === "Doe"),
+    ).toBe(true);
+    // The organization-only "Acme Corporation" lacks a "John" token, so it
+    // should not match.
+    expect(results.every((r) => r.firstName === "John")).toBe(true);
+  });
+
+  test("returns empty when tokens match different contacts", () => {
+    const results = db.search("John Smith");
+    expect(results).toHaveLength(0);
+  });
+
   test("respects limit", () => {
     const results = db.search("a", { limit: 2 });
     expect(results.length).toBeLessThanOrEqual(2);
