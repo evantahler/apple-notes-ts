@@ -20,3 +20,14 @@ export class PasswordProtectedError extends MacOSError {
     this.name = "PasswordProtectedError";
   }
 }
+
+export class DrawingImageNotAvailableError extends MacOSError {
+  constructor(identifier: string) {
+    super(`Handwriting image not available on disk: ${identifier}`, {
+      category: "not_found",
+      recovery:
+        "Apple renders a handwritten drawing to an image only after the note is opened in Notes.app, and iCloud may purge it under Optimize Storage. Open the note in Notes.app on this Mac (and disable Optimize Storage) so the image is rendered locally, then retry.",
+    });
+    this.name = "DrawingImageNotAvailableError";
+  }
+}

@@ -51,6 +51,40 @@ export interface AttachmentRef {
   url: string | null;
 }
 
+// A handwritten-drawing attachment in a note (Apple Pencil / PencilKit).
+export interface DrawingRef {
+  identifier: string;
+  typeUti: string;
+  // Whether Apple's rendered image of this drawing exists on disk. False when
+  // the note hasn't been rendered locally or the media is iCloud-only.
+  available: boolean;
+  imagePath: string | null;
+}
+
+// A drawing plus its resolved rendered image. Produced by readWithHandwriting,
+// which is scatter-gather: an unavailable/unreadable drawing sets `available`
+// false and an `error` string rather than failing the whole call.
+export interface DrawingResult {
+  identifier: string;
+  typeUti: string;
+  available: boolean;
+  imagePath?: string;
+  // base64-encoded PNG of the handwriting, ready to hand to a vision model.
+  // Omitted when unavailable or when the image exceeds the inline size cap
+  // (imagePath is still set in the latter case, with `error` explaining why).
+  base64?: string;
+  mimeType?: string;
+  bytes?: number;
+  // Set when unavailable, or when the on-disk image exceeds the inline cap.
+  error?: string;
+}
+
+export interface NoteContentWithHandwriting {
+  meta: NoteMeta;
+  markdown: string;
+  drawings: DrawingResult[];
+}
+
 // Info passed to a caller-supplied attachmentLinkBuilder when rendering
 // markdown. The caller decides what URL/path to substitute for each attachment.
 export interface AttachmentLinkInfo {

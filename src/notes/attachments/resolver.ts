@@ -65,13 +65,57 @@ export class AttachmentResolver {
           if (existsSync(subPath)) this.walkAndIndex(subPath, 0, index);
         }
       }
+      // Rendered drawings/images live directly in FallbackImages as
+      // "<attachmentUUID>.jpg" (the UUID is the FILENAME, not a subdir), so
+      // they need basename-keyed indexing rather than the dir-name walk above.
+      for (const acct of accounts) {
+        if (!acct.isDirectory()) continue;
+        const fiPath = join(accountsPath, acct.name, "FallbackImages");
+        if (existsSync(fiPath)) this.indexImagesByBasename(fiPath, index);
+      }
     }
     for (const sub of ["FallbackPDFs", "Media", "Accounts"]) {
       const basePath = join(this.containerPath, sub);
       if (existsSync(basePath)) this.walkAndIndex(basePath, 0, index);
     }
+    const topFallbackImages = join(this.containerPath, "FallbackImages");
+    if (existsSync(topFallbackImages)) {
+      this.indexImagesByBasename(topFallbackImages, index);
+    }
 
     return index;
+  }
+
+  // Index the entries of a FallbackImages directory by the attachment's
+  // ZIDENTIFIER. Two on-disk layouts exist across macOS versions and both key
+  // to the same identifier:
+  //   flat   — FallbackImages/<id>.jpg            (id is the FILENAME)
+  //   nested — FallbackImages/<id>/<sub>/FallbackImage.png  (id is the DIRNAME)
+  // For a file we key by basename-without-extension; for a directory we key by
+  // the directory name (the id) and resolve to the first file found inside
+  // (findFirstFile recurses), rather than recursing and mis-keying on the inner
+  // subdir name. First key seen wins, preserving getIndex() priority.
+  private indexImagesByBasename(dir: string, index: Map<string, string>): void {
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch (err) {
+      if (isPermissionError(err)) this.hadPermissionError = true;
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.endsWith(".bundle")) continue;
+      const fullPath = join(dir, entry.name);
+      if (entry.isFile()) {
+        const base = entry.name.replace(/\.[^.]+$/, "");
+        if (base && !index.has(base)) index.set(base, fullPath);
+      } else if (entry.isDirectory()) {
+        if (!index.has(entry.name)) {
+          const file = this.findFirstFile(fullPath, 0);
+          if (file) index.set(entry.name, file);
+        }
+      }
+    }
   }
 
   private walkAndIndex(

@@ -62,6 +62,29 @@ import { isFileBackedAttachment } from "macos-ts";
 isFileBackedAttachment("public.jpeg"); // true
 isFileBackedAttachment("public.url");  // false
 
+// Handwriting (Apple Pencil / PencilKit drawings)
+// Notes never stores recognized text for ink, and the raw strokes are an
+// undocumented CRDT — but Apple renders each drawing to an image on disk once
+// the note is opened. We surface that rendered image so a vision-capable model
+// can read the handwriting directly (far more accurate on cursive than on-device
+// OCR). No transcription engine ships with this library.
+const drawings = db.listDrawings(noteId);        // [{ identifier, typeUti, available, imagePath }]
+const img = db.getDrawingImage("drawing-uuid");  // { path, base64, mimeType, bytes } | null
+
+// One call: note markdown + each drawing resolved to a base64 PNG.
+// Scatter-gather — an unavailable drawing (iCloud-only / never rendered locally)
+// is reported per-item with `available: false` and an `error`, not thrown.
+// Drawings are omitted from listAttachments — use these APIs instead.
+const hw = db.readWithHandwriting(noteId);
+console.log(hw.markdown);
+for (const d of hw.drawings) {
+  if (d.available) {
+    // d.base64 is a PNG — hand it to a vision model to read the handwriting
+  } else {
+    console.log(d.error); // e.g. not rendered locally / iCloud-only
+  }
+}
+
 // Cleanup
 db.close();
 ```
@@ -243,6 +266,7 @@ Add to your MCP client config (e.g., Claude Desktop, Claude Code):
 - **list_notes** — List notes with optional filtering (folder, account, text search, `modifiedAfter` for incremental reads), sorting (title, createdAt, modifiedAt), and limit
 - **search_notes** — Search notes by title and content
 - **read_note** — Read a note as markdown (supports pagination)
+- **read_note_handwriting** — Extract handwritten drawings (Apple Pencil / PencilKit) from a note. Returns the note's typed markdown plus each drawing as an image block for the calling model to read directly; drawings not rendered locally (iCloud-only) come back marked unavailable
 - **list_attachments** — List file-backed attachments for a note (set `includeInlineAttachments=true` to also return inline rows like URL chips, hashtags, mentions, tables, and galleries)
 - **get_attachment_url** — Get the file URL for an attachment
 
@@ -307,6 +331,8 @@ Error responses include structured recovery guidance:
 ## API
 
 **Notes**: Pass `dbPath` or `containerPath` to `new Notes()` to override auto-detection. Note content is returned as markdown — see [docs/markdown-conversion.md](docs/markdown-conversion.md) for the full formatting map.
+
+Handwriting: `listDrawings`, `getDrawingImage`, and `readWithHandwriting` surface Apple Pencil / PencilKit drawings as Apple's pre-rendered image (the ink strokes are an undocumented CRDT with no recognized text, so the library never decodes strokes and ships no OCR — hand the returned image to a vision-capable model to read it). A drawing's image only exists on disk once the note has been opened in Notes.app and isn't iCloud-only. Handwritten drawings are omitted from `listAttachments` — use the handwriting APIs instead. Unavailable drawings are reported per-item in `readWithHandwriting` (`available: false`, `error` set) rather than thrown.
 
 Errors: `DatabaseNotFoundError` (missing DB or no Full Disk Access), `NoteNotFoundError`, `PasswordProtectedError` (locked notes can't be decrypted).
 

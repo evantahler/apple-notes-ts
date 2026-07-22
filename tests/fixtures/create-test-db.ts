@@ -16,6 +16,13 @@ import {
   dateToMacTime as toMacTime,
 } from "./helpers.ts";
 
+// Minimal 1x1 PNG — valid bytes so GitHub can preview the fixture and
+// loadImageBase64 tests exercise real image encoding.
+const FIXTURE_HANDWRITING_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 const DB_PATH = resolve(FIXTURE_DIR, "NoteStore.sqlite");
 const PROTO_PATH = resolve(FIXTURE_DIR, "../../src/notes/protobuf/notestore.proto");
 
@@ -816,6 +823,45 @@ insertNote({
   attributeRuns: [titleRun(15), bodyRun(36)],
 });
 
+// Note 16: Handwritten note (Apple Pencil / PencilKit drawings).
+// Two drawing attachments: the first has a rendered FallbackImage on disk
+// (available), the second does not (iCloud-only / never rendered locally) to
+// exercise the scatter-gather "unavailable" branch of readWithHandwriting.
+// The two UTIs mirror what real Macs use: macOS 26 stores handwriting as
+// "com.apple.paper"; older releases used "com.apple.drawing.2". Both must match.
+// "Handwritten Note\n"=17, "My handwriting:\n"=16, U+FFFC=1, "\n"=1, U+FFFC=1, "\n"=1
+const drawingId1 = "DRAWING-ATTACH-UUID-001";
+const drawingId2 = "DRAWING-ATTACH-UUID-002";
+const drawingNotePk = insertNote({
+  title: "Handwritten Note",
+  snippet: "Has Apple Pencil handwriting",
+  folderId: 10,
+  createdAt: yesterday,
+  modifiedAt: now,
+  noteText: "Handwritten Note\nMy handwriting:\n￼\n￼\n",
+  attributeRuns: [
+    titleRun(17), // "Handwritten Note\n"
+    bodyRun(16), // "My handwriting:\n"
+    attachmentRun(drawingId1, "com.apple.paper"),
+    bodyRun(1), // "\n"
+    attachmentRun(drawingId2, "com.apple.drawing.2"),
+    bodyRun(1), // "\n"
+  ],
+});
+
+// Both drawing attachment rows exist in the DB (no ZMEDIA — drawings resolve by
+// their own ZIDENTIFIER under FallbackImages), but only drawingId1 has a file.
+db.query(
+  `INSERT INTO ZICCLOUDSYNCINGOBJECT
+   (Z_PK, Z_ENT, Z_OPT, ZIDENTIFIER, ZTYPEUTI, ZNOTE1)
+   VALUES (305, ${ENT_ATTACHMENT}, 1, ?, 'com.apple.paper', ?)`,
+).run(drawingId1, drawingNotePk);
+db.query(
+  `INSERT INTO ZICCLOUDSYNCINGOBJECT
+   (Z_PK, Z_ENT, Z_OPT, ZIDENTIFIER, ZTYPEUTI, ZNOTE1)
+   VALUES (306, ${ENT_ATTACHMENT}, 1, ?, 'com.apple.drawing.2', ?)`,
+).run(drawingId2, drawingNotePk);
+
 // ============================================================================
 // Create fake attachment files
 // ============================================================================
@@ -830,12 +876,31 @@ const pdfDir = resolve(FIXTURE_DIR, "FallbackPDFs", pdfAttachmentId);
 mkdirSync(pdfDir, { recursive: true });
 writeFileSync(resolve(pdfDir, "FallbackPDF.pdf"), "fake-pdf-data-for-testing");
 
+// Handwriting: Apple renders the drawing under Accounts/<acct>/FallbackImages/.
+// Real macOS 26 nests it as <attachmentId>/<sub>/FallbackImage.png (the UUID is
+// a DIRECTORY, and the leaf is a PNG). Only drawingId1 gets a file; drawingId2
+// is intentionally left unrendered to exercise the iCloud-only / unavailable
+// case. Mirror the nested layout so the resolver's dir-keyed indexing is tested.
+const drawingRenditionDir = resolve(
+  FIXTURE_DIR,
+  "Accounts",
+  "ACCOUNT-UUID-ICLOUD",
+  "FallbackImages",
+  drawingId1,
+  "1_RENDITION-UUID-001",
+);
+mkdirSync(drawingRenditionDir, { recursive: true });
+writeFileSync(
+  resolve(drawingRenditionDir, "FallbackImage.png"),
+  FIXTURE_HANDWRITING_PNG,
+);
+
 // ============================================================================
 // Done
 // ============================================================================
 
 db.close();
 console.log(`Created test database at ${DB_PATH}`);
-console.log("Notes created: 15");
+console.log("Notes created: 16");
 console.log("Accounts: iCloud, On My Mac");
 console.log("Folders: Notes, Work, Personal");

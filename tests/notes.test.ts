@@ -74,7 +74,7 @@ describe("folders", () => {
 describe("notes", () => {
   test("returns all notes", () => {
     const notes = db.notes();
-    expect(notes).toHaveLength(15);
+    expect(notes).toHaveLength(16);
   });
 
   test("filters by folder name", () => {
@@ -469,6 +469,15 @@ describe("listAttachments", () => {
     });
     expect(attachments).toHaveLength(1);
     expect(attachments[0]?.contentType).toBe("com.apple.notes.table");
+  });
+
+  test("filters out handwritten drawing attachments", () => {
+    const note = db.notes().find((n) => n.title === "Handwritten Note");
+    if (!note) throw new Error("fixture missing 'Handwritten Note'");
+    expect(db.listAttachments(note.id)).toEqual([]);
+    expect(
+      db.listAttachments(note.id, { includeInlineAttachments: true }),
+    ).toEqual([]);
   });
 });
 

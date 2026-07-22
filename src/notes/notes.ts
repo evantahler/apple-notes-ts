@@ -1,6 +1,9 @@
 import type { Database } from "bun:sqlite";
 import { openFullDiskAccessSettings } from "../errors.ts";
-import { isFileBackedAttachment } from "./attachments/content-types.ts";
+import {
+  isDrawingAttachment,
+  isFileBackedAttachment,
+} from "./attachments/content-types.ts";
 import {
   AttachmentResolver,
   type ResolveResult,
@@ -8,7 +11,16 @@ import {
 import { noteToMarkdown } from "./conversion/proto-to-markdown.ts";
 import { openDatabase } from "./database/connection.ts";
 import { NoteReader } from "./database/reader.ts";
-import { NoteNotFoundError, PasswordProtectedError } from "./errors.ts";
+import {
+  DrawingImageNotAvailableError,
+  NoteNotFoundError,
+  PasswordProtectedError,
+} from "./errors.ts";
+import { collectDrawingRuns, type DrawingRun } from "./handwriting/drawings.ts";
+import {
+  loadImageBase64,
+  MAX_INLINE_IMAGE_BYTES,
+} from "./handwriting/image.ts";
 import {
   type DecodedTable,
   decodeMergeableTable,
@@ -17,11 +29,14 @@ import {
 import type {
   Account,
   AttachmentRef,
+  DrawingRef,
+  DrawingResult,
   Folder,
   ListAttachmentsOptions,
   ListNotesOptions,
   NoteContent,
   NoteContentPage,
+  NoteContentWithHandwriting,
   NoteMeta,
   PaginationOptions,
   ReadOptions,
@@ -127,9 +142,14 @@ export class Notes {
     options?: ListAttachmentsOptions,
   ): AttachmentRef[] {
     const refs = this.reader.listAttachments(noteId);
+    // Handwriting uses listDrawings / readWithHandwriting — drawing rows have no
+    // useful filename and resolve via FallbackImages, not the usual Media path.
+    const withoutDrawings = refs.filter(
+      (r) => !isDrawingAttachment(r.contentType),
+    );
     const filtered = options?.includeInlineAttachments
-      ? refs
-      : refs.filter((r) => isFileBackedAttachment(r.contentType));
+      ? withoutDrawings
+      : withoutDrawings.filter((r) => isFileBackedAttachment(r.contentType));
     return filtered.map((ref) => ({
       ...ref,
       url: this.getAttachmentUrl(ref.identifier || ref.name),
@@ -172,6 +192,122 @@ export class Notes {
       return firstError;
     }
     return second;
+  }
+
+  // List the handwritten drawings (Apple Pencil / PencilKit) referenced by a
+  // note, noting whether Apple's rendered image of each is available on disk.
+  listDrawings(noteId: number): DrawingRef[] {
+    const result = this.reader.getNote(noteId);
+    if (!result) throw new NoteNotFoundError(noteId);
+    if (result.meta.isPasswordProtected) {
+      throw new PasswordProtectedError(noteId);
+    }
+    if (!result.zdata) return [];
+    const decoded = decodeNoteData(result.zdata);
+    return collectDrawingRuns(decoded).map((run) => {
+      const resolved = this.resolveAttachment(run.identifier);
+      const available = "path" in resolved;
+      return {
+        identifier: run.identifier,
+        typeUti: run.typeUti,
+        available,
+        imagePath: available ? resolved.path : null,
+      };
+    });
+  }
+
+  // Resolve a single drawing's rendered image to a base64 PNG (plus path/size).
+  // Returns null when no rendered image exists on disk. base64 is null when the
+  // image exceeds the inline size cap (path is still returned).
+  getDrawingImage(identifier: string): {
+    path: string;
+    base64: string | null;
+    mimeType: string;
+    bytes: number;
+  } | null {
+    const resolved = this.resolveAttachment(identifier);
+    if (!("path" in resolved)) return null;
+    const loaded = loadImageBase64(resolved.path);
+    if ("tooLarge" in loaded) {
+      return {
+        path: resolved.path,
+        base64: null,
+        mimeType: "image/png",
+        bytes: loaded.bytes,
+      };
+    }
+    return {
+      path: resolved.path,
+      base64: loaded.base64,
+      mimeType: loaded.mimeType,
+      bytes: loaded.bytes,
+    };
+  }
+
+  // Read a note's markdown and, for every handwritten drawing it contains,
+  // resolve Apple's rendered image as a base64 PNG ready to hand to a vision
+  // model. Scatter-gather: an unavailable or unreadable drawing is reported in
+  // its DrawingResult (available=false, error set) rather than throwing.
+  readWithHandwriting(noteId: number): NoteContentWithHandwriting {
+    const result = this.reader.getNote(noteId);
+    if (!result) throw new NoteNotFoundError(noteId);
+    if (result.meta.isPasswordProtected) {
+      throw new PasswordProtectedError(noteId);
+    }
+
+    let markdown = "";
+    const drawings: DrawingResult[] = [];
+    if (result.zdata) {
+      const decoded = decodeNoteData(result.zdata);
+      const tables = this.resolveTableAttachments(decoded);
+      markdown = noteToMarkdown(decoded, tables);
+      for (const run of collectDrawingRuns(decoded)) {
+        drawings.push(this.buildDrawingResult(run));
+      }
+    }
+    return { meta: result.meta, markdown, drawings };
+  }
+
+  private buildDrawingResult(run: DrawingRun): DrawingResult {
+    try {
+      const img = this.getDrawingImage(run.identifier);
+      if (!img) {
+        const err = new DrawingImageNotAvailableError(run.identifier);
+        return {
+          identifier: run.identifier,
+          typeUti: run.typeUti,
+          available: false,
+          error: `${err.message}. ${err.recovery}`,
+        };
+      }
+      if (img.base64 === null) {
+        return {
+          identifier: run.identifier,
+          typeUti: run.typeUti,
+          available: true,
+          imagePath: img.path,
+          mimeType: img.mimeType,
+          bytes: img.bytes,
+          error: `Image exceeds inline size cap (${MAX_INLINE_IMAGE_BYTES} bytes); use imagePath to read from disk`,
+        };
+      }
+      return {
+        identifier: run.identifier,
+        typeUti: run.typeUti,
+        available: true,
+        imagePath: img.path,
+        base64: img.base64,
+        mimeType: img.mimeType,
+        bytes: img.bytes,
+      };
+    } catch (e) {
+      return {
+        identifier: run.identifier,
+        typeUti: run.typeUti,
+        available: false,
+        error: e instanceof Error ? e.message : String(e),
+      };
+    }
   }
 
   private resolveTableAttachments(
