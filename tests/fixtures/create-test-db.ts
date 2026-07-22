@@ -16,6 +16,13 @@ import {
   dateToMacTime as toMacTime,
 } from "./helpers.ts";
 
+// Minimal 1x1 PNG — valid bytes so GitHub can preview the fixture and
+// loadImageBase64 tests exercise real image encoding.
+const FIXTURE_HANDWRITING_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 const DB_PATH = resolve(FIXTURE_DIR, "NoteStore.sqlite");
 const PROTO_PATH = resolve(FIXTURE_DIR, "../../src/notes/protobuf/notestore.proto");
 
@@ -885,7 +892,7 @@ const drawingRenditionDir = resolve(
 mkdirSync(drawingRenditionDir, { recursive: true });
 writeFileSync(
   resolve(drawingRenditionDir, "FallbackImage.png"),
-  "fake-png-handwriting-data-for-testing",
+  FIXTURE_HANDWRITING_PNG,
 );
 
 // ============================================================================

@@ -145,8 +145,9 @@ describe("loadImageBase64", () => {
     if ("tooLarge" in loaded) throw new Error("expected a small image");
     expect(loaded.mimeType).toBe("image/png");
     expect(loaded.bytes).toBeGreaterThan(0);
-    expect(Buffer.from(loaded.base64, "base64").toString()).toBe(
-      "fake-png-handwriting-data-for-testing",
+    const bytes = Buffer.from(loaded.base64, "base64");
+    expect(bytes.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     );
   });
 
