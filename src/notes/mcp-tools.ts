@@ -3,6 +3,7 @@ import {
   type McpServerInstance,
   readOnlyAnnotations,
   wrapTool,
+  wrapToolWithImages,
 } from "../mcp-helpers.ts";
 import type { Notes } from "./notes.ts";
 
@@ -15,6 +16,7 @@ export const notesCapability = {
     "list_notes",
     "search_notes",
     "read_note",
+    "read_note_handwriting",
     "list_attachments",
     "get_attachment_url",
   ],
@@ -213,6 +215,46 @@ export function registerNotesTools(
         {
           tool: "list_attachments",
           description: "See attachments for this note",
+        },
+      ]),
+  );
+
+  server.registerTool(
+    "read_note_handwriting",
+    {
+      title: "Read note handwriting",
+      description:
+        "Extract handwritten drawings (Apple Pencil / PencilKit) from a note so you can read the handwriting. Requires a noteId from list_notes or search_notes. Returns the note's typed markdown PLUS each handwritten drawing as an image block — read the handwriting directly from those images (you, the model, are the OCR). This returns Apple's pre-rendered picture of the ink, not the raw strokes. Drawings that haven't been rendered locally (never opened in Notes.app, or iCloud-only under Optimize Storage) come back as unavailable with an explanation instead of an image.",
+      annotations: readOnlyAnnotations,
+      inputSchema: {
+        noteId: z
+          .number()
+          .int()
+          .describe(
+            "Numeric note ID (from list_notes or search_notes results).",
+          ),
+      },
+    },
+    async ({ noteId }) =>
+      wrapToolWithImages(() => {
+        const content = notes.readWithHandwriting(noteId);
+        const images = content.drawings
+          .filter((d) => d.base64)
+          .map((d) => ({
+            base64: d.base64 as string,
+            mimeType: d.mimeType ?? "image/png",
+          }));
+        // Strip base64 from the JSON envelope so the pixels aren't duplicated
+        // (they travel in the image content blocks); keep per-drawing status.
+        const data = {
+          ...content,
+          drawings: content.drawings.map(({ base64, ...rest }) => rest),
+        };
+        return { data, images };
+      }, [
+        {
+          tool: "read_note",
+          description: "Read the note's full typed markdown",
         },
       ]),
   );

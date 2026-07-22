@@ -27,7 +27,8 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 - **Markdown conversion**: Custom converter walks protobuf AttributeRun entries to emit markdown
 - **Entity types**: Discovered at runtime from `Z_PRIMARYKEY` table (ICAccount, ICFolder, ICNote, ICAttachment)
 - **Mac timestamps (Notes)**: Seconds since 2001-01-01 (add 978307200 for Unix epoch)
-- **Notes attachments**: `listAttachments(noteId)` filters out inline ZTYPEUTI values (`com.apple.notes.table`, `com.apple.notes.gallery`, `public.url`, and any `com.apple.notes.inlinetextattachment.*`) by default since they have no on-disk file. Pass `{ includeInlineAttachments: true }` to opt in. Helper `isFileBackedAttachment(contentType)` is exported for advanced consumers (defined in `src/notes/attachments/content-types.ts`).
+- **Notes attachments**: `listAttachments(noteId)` filters out inline ZTYPEUTI values (`com.apple.notes.table`, `com.apple.notes.gallery`, `public.url`, and any `com.apple.notes.inlinetextattachment.*`) and handwritten drawing UTIs (`isDrawingAttachment`) by default since they have no useful on-disk file path via the usual Media lookup (drawings use `listDrawings` / `readWithHandwriting` instead). Pass `{ includeInlineAttachments: true }` to opt in to inline rows (tables, URL chips, etc.) — drawings are still excluded. Helper `isFileBackedAttachment(contentType)` is exported for advanced consumers (defined in `src/notes/attachments/content-types.ts`).
+- **Handwriting (Apple Pencil / PencilKit)**: drawing attachments matched by `isDrawingAttachment` (`DRAWING_ATTACHMENT_TYPES` in `content-types.ts`) — macOS 26 uses `com.apple.paper` (exact match, not `com.apple.paper.doc.*`); older macOS uses `com.apple.drawing*`. No stroke decoding or OCR; surface Apple's pre-rendered PNG from `Accounts/<acct>/FallbackImages/` (only after opening the note locally — iCloud-only/purged → unavailable). API: `listDrawings`, `getDrawingImage`, `readWithHandwriting` (scatter-gather: missing drawings set `available: false` + `error`). MCP `read_note_handwriting` returns markdown JSON plus image blocks via `wrapToolWithImages`. Resolver details: `indexImagesByBasename` in `attachments/resolver.ts`; helpers in `src/notes/handwriting/`.
 - **Messages database**: `~/Library/Messages/chat.db` — standard relational schema (handle, chat, message, attachment tables joined via junction tables)
 - **Mac timestamps (Messages)**: Nanoseconds since 2001-01-01 (divide by 1e9, then add 978307200 for Unix epoch)
 - **Message text**: Stored in `text` column, or as NSArchiver-encoded `attributedBody` blob when rich text
@@ -55,7 +56,7 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 - `src/index.ts` — Package barrel export
 - `src/errors.ts` — Base `MacOSError` class and shared errors (DatabaseNotFoundError, DatabaseAccessDeniedError)
 - `src/mcp-server.ts` — Slim MCP server orchestrator (creates instances, registers tools from feature modules)
-- `src/mcp-helpers.ts` — Shared MCP helpers (wrapTool, toolError, readOnlyAnnotations, McpServerInstance type)
+- `src/mcp-helpers.ts` — Shared MCP helpers (wrapTool, wrapToolWithImages, toolError, readOnlyAnnotations, McpServerInstance type)
 - `src/notes/notes.ts` — Main `Notes` class (public API for Apple Notes)
 - `src/notes/index.ts` — Notes barrel export
 - `src/notes/types.ts` — TypeScript type definitions for Notes
@@ -67,7 +68,10 @@ macos-ts — TypeScript package for accessing macOS data (Notes, Photos, iMessag
 - `src/notes/database/connection.ts` — SQLite database connection setup
 - `src/notes/database/queries.ts` — SQL queries and Mac time conversion
 - `src/notes/database/reader.ts` — SQLite query execution and row mapping
-- `src/notes/attachments/resolver.ts` — Attachment file URL resolution
+- `src/notes/attachments/resolver.ts` — Attachment file URL resolution (indexes Media/FallbackPDFs by dir name; FallbackImages by file basename or UUID dir name → first inner file, covering flat and nested layouts)
+- `src/notes/attachments/content-types.ts` — Attachment UTI classification (`isFileBackedAttachment`, `isDrawingAttachment`, `DRAWING_ATTACHMENT_TYPES`)
+- `src/notes/handwriting/drawings.ts` — Pure `collectDrawingRuns(decoded)` — finds drawing attachment runs in a decoded note
+- `src/notes/handwriting/image.ts` — `loadImageBase64(path)` + inline size cap; drawings are PNG bytes reported as `image/png`
 - `src/messages/messages.ts` — Main `Messages` class (public API for iMessage/SMS)
 - `src/messages/index.ts` — Messages barrel export
 - `src/messages/types.ts` — TypeScript type definitions for Messages
@@ -200,7 +204,7 @@ Always bump the patch version in `package.json` when making code changes. Use se
 
 ## Testing
 
-Notes tests run against `tests/fixtures/NoteStore.sqlite` — a checked-in SQLite database with 15 sample notes covering all formatting types (including a "Sync Edge Note" created after but modified before a cutoff, to exercise `modifiedAfter` over-inclusion via the created-date branch). The fixture is generated by `tests/fixtures/create-test-db.ts`. If you modify the proto schema or add test cases, regenerate with `bun run create-fixture`.
+Notes tests run against `tests/fixtures/NoteStore.sqlite` — a checked-in SQLite database with 16 sample notes covering all formatting types (including a "Sync Edge Note" for `modifiedAfter` over-inclusion and a "Handwritten Note" with one rendered + one unrendered drawing). The fixture is generated by `tests/fixtures/create-test-db.ts`. If you modify the proto schema or add test cases, regenerate with `bun run create-fixture`. Handwriting tests: `tests/notes-handwriting.test.ts`.
 
 Messages tests run against `tests/fixtures/chat.db` — a checked-in SQLite database with 15 messages across 3 chats (2 DMs + 1 group). The fixture is generated by `tests/fixtures/create-messages-db.ts`. It covers regular text, attributedBody-only messages, different services (iMessage/SMS), thread replies, audio messages, and attachments.
 

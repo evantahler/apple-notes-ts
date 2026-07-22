@@ -72,9 +72,9 @@ function getErrorJson(result: any) {
 // ============================================================================
 
 describe("server metadata", () => {
-  test("server exposes 27 tools", async () => {
+  test("server exposes 28 tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(27);
+    expect(tools).toHaveLength(28);
   });
 
   test("each tool has a description", async () => {
@@ -111,6 +111,7 @@ describe("server metadata", () => {
       "list_notes",
       "list_photos",
       "read_note",
+      "read_note_handwriting",
       "search_contacts",
       "search_messages",
       "search_notes",
@@ -448,6 +449,59 @@ describe("read_note", () => {
     expect(err.category).toBe("access_denied");
     expect(err.retryable).toBe(false);
     expect(err.recovery).toContain("password-protected");
+  });
+});
+
+// ============================================================================
+// read_note_handwriting
+// ============================================================================
+
+describe("read_note_handwriting", () => {
+  let handwrittenNoteId: number;
+
+  beforeAll(async () => {
+    const result = await client.callTool({ name: "list_notes", arguments: {} });
+    const notes = parseResult(result);
+    const note = notes.find(
+      (n: { title: string }) => n.title === "Handwritten Note",
+    );
+    if (!note) throw new Error("fixture missing 'Handwritten Note'");
+    handwrittenNoteId = note.id;
+  });
+
+  test("returns markdown envelope plus image blocks for rendered drawings", async () => {
+    const result = await client.callTool({
+      name: "read_note_handwriting",
+      arguments: { noteId: handwrittenNoteId },
+    });
+    expect(result.isError).not.toBe(true);
+    const envelope = parseRaw(result);
+    expect(envelope.data.meta.title).toBe("Handwritten Note");
+    expect(envelope.data.markdown).toContain("My handwriting");
+    expect(envelope.data.drawings).toHaveLength(2);
+
+    const rendered = envelope.data.drawings.find(
+      (d: { identifier: string }) => d.identifier === "DRAWING-ATTACH-UUID-001",
+    );
+    expect(rendered?.available).toBe(true);
+    expect(rendered?.base64).toBeUndefined();
+
+    const missing = envelope.data.drawings.find(
+      (d: { identifier: string }) => d.identifier === "DRAWING-ATTACH-UUID-002",
+    );
+    expect(missing?.available).toBe(false);
+    expect(missing?.error).toBeTruthy();
+
+    const imageBlocks = (
+      result.content as Array<{
+        type: string;
+        mimeType?: string;
+        data?: string;
+      }>
+    ).filter((c) => c.type === "image");
+    expect(imageBlocks).toHaveLength(1);
+    expect(imageBlocks[0]?.mimeType).toBe("image/png");
+    expect(imageBlocks[0]?.data).toBeTruthy();
   });
 });
 

@@ -62,4 +62,36 @@ export function wrapTool<T>(fn: () => T, hints?: NextAction[]) {
   }
 }
 
+export interface ToolImage {
+  base64: string;
+  mimeType: string;
+}
+
+// Like wrapTool, but also emits MCP image content blocks alongside the JSON
+// envelope so a vision-capable client (the calling agent) can read the pixels
+// directly — e.g. handing it the rendered image of a handwritten note. The
+// envelope carries the structured metadata; the image blocks carry the bytes.
+export function wrapToolWithImages<T>(
+  fn: () => { data: T; images: ToolImage[] },
+  hints?: NextAction[],
+) {
+  try {
+    const { data, images } = fn();
+    const result: Record<string, unknown> = { data };
+    if (Array.isArray(data)) result.totalResults = data.length;
+    if (hints?.length) result._next = hints;
+    const content: Array<
+      | { type: "text"; text: string }
+      | { type: "image"; data: string; mimeType: string }
+    > = [{ type: "text", text: JSON.stringify(result, null, 2) }];
+    for (const img of images) {
+      content.push({ type: "image", data: img.base64, mimeType: img.mimeType });
+    }
+    return { content };
+  } catch (e) {
+    if (e instanceof MacOSError) return toolError(e);
+    throw e;
+  }
+}
+
 export type McpServerInstance = InstanceType<typeof McpServer>;
